@@ -1,16 +1,178 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
+const session = require('express-session');
 const storage = require('./storage');
 const { scrapeHotSearches } = require('./scraper');
 const config = require('../config.json');
 
 const app = express();
-const PORT = config.port || 3000;
+const PORT = Number(process.env.PORT) || config.port || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+const CONFIG_PATH = path.join(__dirname, '../config.json');
+const COOKIES_PATH = path.join(__dirname, '../cookies.json');
+
+function formatLocalDateTime(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function parseRawCookie(rawCookie) {
+  return String(rawCookie || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) return acc;
+      const key = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      if (key) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+}
+
+function buildRawCookie(cookieMap) {
+  return Object.entries(cookieMap || {})
+    .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map(([key, value]) => `${key}=${String(value).trim()}`)
+    .join('; ');
+}
+
+function buildCookieFileEntries(cookieMap) {
+  return Object.entries(cookieMap || {}).map(([name, value]) => ({
+    name,
+    value: String(value),
+    domain: '.toutiao.com',
+    path: '/'
+  }));
+}
+
+function writeJsonFile(filePath, content) {
+  fs.writeFileSync(filePath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
+}
+
+function getCookieSettings() {
+  const cookieMap = config.cookies || {};
+  const rawCookie = buildRawCookie(cookieMap);
+  return {
+    cookies: cookieMap,
+    rawCookie,
+    updatedAt: formatLocalDateTime()
+  };
+}
+
+function saveCookieSettings(rawCookie) {
+  const cookieMap = parseRawCookie(rawCookie);
+  if (Object.keys(cookieMap).length === 0) {
+    throw new Error('Cookie 不能为空或格式无效');
+  }
+
+  const nextConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  nextConfig.cookies = cookieMap;
+  nextConfig.mpRequest = nextConfig.mpRequest || {};
+  nextConfig.mpRequest.rawCookie = buildRawCookie(cookieMap);
+  writeJsonFile(CONFIG_PATH, nextConfig);
+  writeJsonFile(COOKIES_PATH, { cookies: buildCookieFileEntries(cookieMap) });
+
+  config.cookies = cookieMap;
+  config.mpRequest = config.mpRequest || {};
+  config.mpRequest.rawCookie = nextConfig.mpRequest.rawCookie;
+
+  return getCookieSettings();
+}
+
+function ensureAuthenticated(req, res) {
+  if (req.session && req.session.user) {
+    return true;
+  }
+  res.status(401).json({ success: false, message: 'Unauthorized' });
+  return false;
+}
 
 app.use(cors());
 app.use(express.json());
+
+app.use(session({
+  secret: 'toutiao-hot-monitor-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // Set to true if using HTTPS
+}));
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  // Hardcoded for demo, you can change these credentials or use config.json
+  if (username === 'pengtianyu' && password === 'sunny808') {
+    req.session.user = username;
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid credentials' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
+});
+
+app.get('/api/admin/cookies', (req, res) => {
+  try {
+    if (!ensureAuthenticated(req, res)) return;
+    res.json({ success: true, data: getCookieSettings() });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/admin/cookies', async (req, res) => {
+  try {
+    if (!ensureAuthenticated(req, res)) return;
+    const saved = saveCookieSettings(req.body?.rawCookie);
+
+    let userInfo = null;
+    let userInfoRefreshMessage = '用户信息刷新失败，请检查 Cookie 是否有效';
+    try {
+      const { fetchUserInfo } = require('./scraper');
+      userInfo = await fetchUserInfo();
+      if (userInfo) {
+        userInfoRefreshMessage = '用户信息已自动刷新';
+      }
+    } catch (refreshError) {
+      console.error('⚠️ Cookie 保存后刷新用户信息失败:', refreshError.message);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...saved,
+        userInfo
+      },
+      message: `Cookie 已保存，${userInfoRefreshMessage}`
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// Authentication Middleware
+app.use((req, res, next) => {
+  if (req.path === '/login.html' || req.path === '/api/login') {
+    return next();
+  }
+  if (!req.session || !req.session.user) {
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    return res.redirect('/login.html');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API: 获取最新热点榜单
@@ -81,7 +243,8 @@ app.get('/api/rising', (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const newOnly = req.query.new === 'true';
     const rising = storage.getFastestRising(limit, newOnly);
-    res.json({ success: true, data: rising });
+    const latestTime = storage.getLatestSnapshot();
+    res.json({ success: true, data: rising, snapshotTime: latestTime });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -99,7 +262,8 @@ app.get('/api/new', (req, res) => {
       rising = rising.filter(item => item.category === category);
     }
     
-    res.json({ success: true, data: rising });
+    const latestTime = storage.getLatestSnapshot();
+    res.json({ success: true, data: rising, snapshotTime: latestTime });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -345,7 +509,7 @@ app.get('/', (req, res) => {
 
 // 定时任务：每 10 分钟抓取一次
 cron.schedule(config.scrapeInterval, async () => {
-  console.log(`⏰ [${new Date().toISOString()}] 定时抓取开始`);
+  console.log(`⏰ [${formatLocalDateTime()}] 定时抓取开始`);
   try {
     await scrapeHotSearches();
     
@@ -360,7 +524,7 @@ cron.schedule(config.scrapeInterval, async () => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║          🔥 头条热点监测工具已启动                      ║

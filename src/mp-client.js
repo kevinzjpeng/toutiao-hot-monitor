@@ -803,6 +803,13 @@ function setFormField(rawBody, field, value) {
   return form.toString();
 }
 
+function applySubmitStyleFallback(rawBody) {
+  let nextBody = String(rawBody || '');
+  nextBody = setFormField(nextBody, 'save', '1');
+  nextBody = setFormField(nextBody, 'pgc_id', '');
+  return nextBody;
+}
+
 async function sendPublishReplay(requestUrl, requestHeaders, requestBody, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -971,6 +978,7 @@ async function publishDraftViaHttp(runtimeOptions = {}) {
   }
 
   const retry7050WithSaveSubmit = options.retry7050WithSaveSubmit !== false;
+  const retryWithClearedPgcId = options.retryWithClearedPgcId !== false;
   const attempts = [];
 
   const firstTry = await sendPublishReplay(requestUrl, requestHeaders, requestBody, timeoutMs);
@@ -996,6 +1004,30 @@ async function publishDraftViaHttp(runtimeOptions = {}) {
 
     finalTry = secondTry;
     requestBody = retryBody;
+  }
+
+  const staleStateCodes = new Set([4012, 4013, 5009, 7050]);
+  const currentPgcId = getFormField(requestBody, 'pgc_id');
+  const shouldRetryWithClearedPgcId =
+    retryWithClearedPgcId &&
+    Number(finalTry.code) !== 0 &&
+    staleStateCodes.has(Number(finalTry.code)) &&
+    Boolean(String(currentPgcId || '').trim());
+
+  if (shouldRetryWithClearedPgcId) {
+    const fallbackBody = applySubmitStyleFallback(requestBody);
+    const fallbackTry = await sendPublishReplay(requestUrl, requestHeaders, fallbackBody, timeoutMs);
+    attempts.push({
+      index: attempts.length + 1,
+      save: fallbackTry.saveValue,
+      status: fallbackTry.response.status,
+      code: fallbackTry.code,
+      message: fallbackTry.data && (fallbackTry.data.message || fallbackTry.data.reason || null),
+      strategy: 'clear-pgc-id-and-submit'
+    });
+
+    finalTry = fallbackTry;
+    requestBody = fallbackBody;
   }
 
   const response = finalTry.response;

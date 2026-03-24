@@ -1,5 +1,6 @@
 const { execSync } = require('child_process');
 const storage = require('./storage');
+const config = require('../config.json');
 
 const TOUTIAO_HOME_URL = 'https://www.toutiao.com/';
 const TOUTIAO_HOT_URL = 'https://www.toutiao.com/hot/'; // 已废弃，返回 404
@@ -9,13 +10,61 @@ const fs = require('fs');
 // 用户信息文件路径
 const USER_INFO_PATH = path.join(__dirname, '../data/user-info.json');
 
+function formatLocalDateTime(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function applyConfiguredCookies() {
+  const cookies = config.cookies || {};
+  const cookieNames = [
+    'tt_webid',
+    'sessionid',
+    'sid_tt',
+    'passport_auth_status',
+    'toutiao_sso_user',
+    'uid_tt',
+    'ttwid'
+  ];
+
+  cookieNames.forEach((cookieName) => {
+    const value = cookies[cookieName];
+    if (value) {
+      try {
+        const escapedValue = String(value)
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\$/g, '\\$');
+        execSync(`agent-browser cookies set ${cookieName} "${escapedValue}"`, {
+          stdio: 'pipe',
+          timeout: 8000
+        });
+      } catch (e) {
+        console.log(`⚠️ Cookie 设置失败，已跳过 ${cookieName}: ${e.message}`);
+      }
+    }
+  });
+}
+
+function runAgentEval(script, timeout = 30000) {
+  const payload = String(script)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, ' ');
+
+  return execSync(`agent-browser eval "${payload}"`, {
+    encoding: 'utf8',
+    timeout
+  });
+}
+
 /**
  * 使用 agent-browser 抓取头条热搜数据
  */
 async function scrapeHotSearches() {
   console.log(`🔍 开始抓取头条热榜：${TOUTIAO_HOME_URL}`);
   
-  const snapshotTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const snapshotTime = formatLocalDateTime();
   
   try {
     // 先获取用户信息（可选）
@@ -52,16 +101,47 @@ async function fetchUserInfo() {
   
   try {
     const { execSync } = require('child_process');
-    
-    // 1. 打开头条首页
+
+    // 1. 先打开页面，再设置 Cookie（避免部分 cookie 字段校验失败）
+    execSync(`agent-browser open "${TOUTIAO_HOME_URL}"`, { stdio: 'pipe', timeout: 30000 });
+    await sleep(1500);
+
+    try {
+      applyConfiguredCookies();
+    } catch (e) {
+      console.log('⚠️ Cookie 设置失败，继续尝试访问:', e.message);
+    }
+
+    // 2. 重新打开页面使 Cookie 生效
     execSync(`agent-browser open "${TOUTIAO_HOME_URL}"`, { stdio: 'pipe', timeout: 30000 });
     await sleep(3000);
-    
-    // 2. 执行 JS 获取用户信息
-    const userInfoOutput = execSync('agent-browser eval "(() => { const userDiv = document.querySelector(\'.user-info\'); if(!userDiv) return { found: false }; const name = userDiv.textContent.trim(); const avatar = userDiv.querySelector(\'img\')?.src; const stats = userDiv.parentElement.querySelectorAll(\'span\'); let statText = \'\'; stats.forEach(s => statText += s.textContent + \' \'); const match = statText.match(/(\\d+)\\s+(\\d+)\\s+(\\d+)/); return { found: true, name, avatar, fans: match ? parseInt(match[1]) : null, follow: match ? parseInt(match[2]) : null, likes: match ? parseInt(match[3]) : null, stats: statText }; })()"', {
-      encoding: 'utf8',
-      timeout: 30000
-    });
+
+    // 3. 执行 JS 获取用户信息
+    const userInfoOutput = runAgentEval(`
+      (() => {
+        const root = document.querySelector('.user-info') || document.querySelector('[class*=user]');
+        if (!root) return { found: false };
+
+        const name = (root.textContent || '').trim();
+        const avatar = (root.querySelector('img') && root.querySelector('img').src) || null;
+
+        const container = root.parentElement || root;
+        const statText = Array.from(container.querySelectorAll('span'))
+          .map((el) => (el.textContent || '').trim())
+          .join(' ');
+
+        const nums = (statText.match(/\d+/g) || []).map((n) => Number(n));
+        return {
+          found: true,
+          name,
+          avatar,
+          fans: nums.length > 0 ? nums[0] : null,
+          follow: nums.length > 1 ? nums[1] : null,
+          likes: nums.length > 2 ? nums[2] : null,
+          stats: statText
+        };
+      })()
+    `, 30000);
     
     let userInfo;
     try {
@@ -72,11 +152,21 @@ async function fetchUserInfo() {
     }
     
     if (userInfo && userInfo.found) {
-      // 3. 获取用户主页链接和 token
-      const linkOutput = execSync('agent-browser eval "(() => { const link = document.querySelector(\'a[href*=\\\\"user\\\\"]\'); return link ? { href: link.href, token: link.href.match(/token\\/([^/]+)/)?.[1] } : null; })()"', {
-        encoding: 'utf8',
-        timeout: 10000
-      });
+      // 4. 获取用户主页链接和 token
+      const linkOutput = runAgentEval(`
+        (() => {
+          const link = document.querySelector('a[href*="/c/user/token/"]') || document.querySelector('a[href*="user/token/"]');
+          if (!link || !link.href) return null;
+
+          const href = link.href;
+          const marker = '/token/';
+          const index = href.indexOf(marker);
+          if (index < 0) return { href, token: null };
+          const rest = href.slice(index + marker.length);
+          const token = rest.split('/')[0].split('?')[0];
+          return { href, token: token || null };
+        })()
+      `, 10000);
       
       try {
         const linkInfo = JSON.parse(linkOutput.trim());
@@ -88,12 +178,12 @@ async function fetchUserInfo() {
         // 忽略链接获取失败
       }
       
-      // 4. 保存用户信息
+      // 5. 保存用户信息
       saveUserInfo(userInfo);
       
       console.log(`✅ 用户信息：${userInfo.name} | 粉丝:${userInfo.fans || '-'} | 关注:${userInfo.follow || '-'} | 获赞:${userInfo.likes || '-'}`);
       
-      // 5. 关闭浏览器
+      // 6. 关闭浏览器
       try {
         execSync('agent-browser close', { stdio: 'pipe', timeout: 5000 });
       } catch (e) {}
@@ -148,9 +238,7 @@ async function fetchHotSearchesViaBrowser() {
     // 1. 设置 Cookie
     console.log('🍪 正在设置 Cookie...');
     try {
-      execSync(`agent-browser cookies set tt_webid "7619515773816096302"`, { stdio: 'pipe', timeout: 5000 });
-      execSync(`agent-browser cookies set sessionid "210ae256e29211d6e618df2a13159f87"`, { stdio: 'pipe', timeout: 5000 });
-      execSync(`agent-browser cookies set sid_tt "210ae256e29211d6e618df2a13159f87"`, { stdio: 'pipe', timeout: 5000 });
+      applyConfiguredCookies();
     } catch (e) {
       console.log('⚠️ Cookie 设置跳过（可能已存在）');
     }
@@ -374,4 +462,11 @@ if (require.main === module) {
   scrapeHotSearches().catch(console.error);
 }
 
-module.exports = { scrapeHotSearches, fetchHotSearchesViaBrowser, extractHotSearchesFromSnapshot, generateDemoData };
+module.exports = {
+  scrapeHotSearches,
+  fetchUserInfo,
+  getCachedUserInfo,
+  fetchHotSearchesViaBrowser,
+  extractHotSearchesFromSnapshot,
+  generateDemoData
+};

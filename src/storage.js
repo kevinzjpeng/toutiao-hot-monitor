@@ -1,123 +1,253 @@
 const fs = require('fs');
 const path = require('path');
+const Database = require('better-sqlite3');
 
-const DB_PATH = path.join(__dirname, '../data/hotspots.json');
+const SQLITE_PATH = path.join(__dirname, '../data/hotspots.db');
+const LEGACY_JSON_PATH = path.join(__dirname, '../data/hotspots.json');
 
-// 确保 data 目录存在
-const dataDir = path.dirname(DB_PATH);
+const dataDir = path.dirname(SQLITE_PATH);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-function loadDB() {
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      const data = fs.readFileSync(DB_PATH, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('⚠️ 读取数据库失败:', error.message);
-  }
-  return { snapshots: [] };
+const db = new Database(SQLITE_PATH);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+function formatLocalDateTime(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function saveDB(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+function ensureSchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_time TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS hotspot_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_id INTEGER NOT NULL,
+      rank INTEGER,
+      topic TEXT NOT NULL,
+      heat TEXT,
+      trend TEXT,
+      category TEXT,
+      url TEXT,
+      FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_snapshots_time ON snapshots(snapshot_time);
+    CREATE INDEX IF NOT EXISTS idx_hotspot_items_snapshot ON hotspot_items(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_hotspot_items_topic ON hotspot_items(topic);
+  `);
+}
+
+function getSnapshotByTime(snapshotTime) {
+  return db.prepare('SELECT id, snapshot_time AS snapshotTime FROM snapshots WHERE snapshot_time = ?').get(snapshotTime) || null;
+}
+
+function insertSnapshotIfNeeded(snapshotTime) {
+  db.prepare('INSERT OR IGNORE INTO snapshots(snapshot_time) VALUES (?)').run(snapshotTime);
+  return getSnapshotByTime(snapshotTime);
+}
+
+function getItemsBySnapshotId(snapshotId) {
+  return db.prepare(`
+    SELECT
+      rank,
+      topic,
+      heat,
+      trend,
+      category,
+      url
+    FROM hotspot_items
+    WHERE snapshot_id = ?
+    ORDER BY rank ASC, id ASC
+  `).all(snapshotId);
+}
+
+function migrateFromJsonIfNeeded() {
+  const snapshotCount = db.prepare('SELECT COUNT(1) AS count FROM snapshots').get().count;
+  if (snapshotCount > 0) return;
+  if (!fs.existsSync(LEGACY_JSON_PATH)) return;
+
+  try {
+    const content = fs.readFileSync(LEGACY_JSON_PATH, 'utf8');
+    const legacy = JSON.parse(content);
+    const snapshots = Array.isArray(legacy.snapshots) ? legacy.snapshots : [];
+    if (snapshots.length === 0) return;
+
+    const tx = db.transaction((rows) => {
+      const insertItemStmt = db.prepare(`
+        INSERT INTO hotspot_items(snapshot_id, rank, topic, heat, trend, category, url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const row of rows) {
+        if (!row || !row.snapshotTime) continue;
+        const snapshot = insertSnapshotIfNeeded(row.snapshotTime);
+        if (!snapshot) continue;
+
+        const items = Array.isArray(row.items) ? row.items : [];
+        for (const item of items) {
+          insertItemStmt.run(
+            snapshot.id,
+            Number.isFinite(Number(item?.rank)) ? Number(item.rank) : null,
+            item?.topic || '',
+            item?.heat == null ? null : String(item.heat),
+            item?.trend || null,
+            item?.category || null,
+            item?.url || null
+          );
+        }
+      }
+    });
+
+    tx(snapshots);
+    console.log(`✅ 已迁移 ${snapshots.length} 个快照到 SQLite：${SQLITE_PATH}`);
+  } catch (error) {
+    console.error('⚠️ 迁移 JSON 数据到 SQLite 失败:', error.message);
+  }
 }
 
 function init() {
-  const data = loadDB();
-  saveDB(data);
-  console.log('✅ 数据库初始化完成');
-  console.log(`📁 数据库位置：${DB_PATH}`);
+  ensureSchema();
+  migrateFromJsonIfNeeded();
+  console.log('✅ SQLite 数据库初始化完成');
+  console.log(`📁 数据库位置：${SQLITE_PATH}`);
 }
 
-function saveHotSearches(items, snapshotTime) {
-  const data = loadDB();
-  data.snapshots.push({
-    snapshotTime,
-    items
+function saveHotSearches(items, snapshotTime = formatLocalDateTime()) {
+  const tx = db.transaction((rows, time) => {
+    const snapshot = insertSnapshotIfNeeded(time);
+    if (!snapshot) throw new Error('无法创建快照记录');
+
+    db.prepare('DELETE FROM hotspot_items WHERE snapshot_id = ?').run(snapshot.id);
+
+    const insertItemStmt = db.prepare(`
+      INSERT INTO hotspot_items(snapshot_id, rank, topic, heat, trend, category, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const item of rows) {
+      insertItemStmt.run(
+        snapshot.id,
+        Number.isFinite(Number(item?.rank)) ? Number(item.rank) : null,
+        item?.topic || '',
+        item?.heat == null ? null : String(item.heat),
+        item?.trend || null,
+        item?.category || null,
+        item?.url || null
+      );
+    }
   });
-  saveDB(data);
-  console.log(`✅ 已保存 ${items.length} 条热点数据`);
+
+  tx(Array.isArray(items) ? items : [], snapshotTime);
+  console.log(`✅ 已保存 ${Array.isArray(items) ? items.length : 0} 条热点数据`);
 }
 
 function getLatestSnapshot() {
-  const data = loadDB();
-  if (data.snapshots.length === 0) return null;
-  return data.snapshots[data.snapshots.length - 1].snapshotTime;
+  const row = db.prepare('SELECT snapshot_time AS snapshotTime FROM snapshots ORDER BY snapshot_time DESC LIMIT 1').get();
+  return row ? row.snapshotTime : null;
 }
 
 function getHotSearchesBySnapshot(snapshotTime) {
-  const data = loadDB();
-  const snapshot = data.snapshots.find(s => s.snapshotTime === snapshotTime);
-  return snapshot ? snapshot.items : [];
+  const snapshot = getSnapshotByTime(snapshotTime);
+  if (!snapshot) return [];
+  return getItemsBySnapshotId(snapshot.id);
 }
 
 function getRecentSnapshots(limit = 10) {
-  const data = loadDB();
-  return data.snapshots
-    .slice(-limit)
-    .reverse()
-    .map(s => ({
-      snapshotTime: s.snapshotTime,
-      count: s.items.length
-    }));
+  return db.prepare(`
+    SELECT
+      s.snapshot_time AS snapshotTime,
+      COUNT(i.id) AS count
+    FROM snapshots s
+    LEFT JOIN hotspot_items i ON i.snapshot_id = s.id
+    GROUP BY s.id, s.snapshot_time
+    ORDER BY s.snapshot_time DESC
+    LIMIT ?
+  `).all(limit);
 }
 
 function getTopicHistory(topic, days = 7) {
-  const data = loadDB();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  
-  return data.snapshots
-    .filter(s => new Date(s.snapshotTime) >= cutoff)
-    .flatMap(s => s.items.filter(item => item.topic === topic))
-    .sort((a, b) => new Date(a.snapshotTime) - new Date(b.snapshotTime));
+  const cutoffStr = formatLocalDateTime(cutoff);
+
+  return db.prepare(`
+    SELECT
+      i.rank,
+      i.topic,
+      i.heat,
+      i.trend,
+      i.category,
+      i.url,
+      s.snapshot_time AS snapshotTime
+    FROM hotspot_items i
+    INNER JOIN snapshots s ON s.id = i.snapshot_id
+    WHERE i.topic = ? AND s.snapshot_time >= ?
+    ORDER BY s.snapshot_time ASC
+  `).all(topic, cutoffStr);
 }
 
 function cleanupOldData(days = 7) {
-  const data = loadDB();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  
-  const originalCount = data.snapshots.length;
-  data.snapshots = data.snapshots.filter(s => new Date(s.snapshotTime) >= cutoff);
-  saveDB(data);
-  
-  const cleaned = originalCount - data.snapshots.length;
-  console.log(`🧹 已清理 ${cleaned} 个旧快照`);
-  return cleaned;
+  const cutoffStr = formatLocalDateTime(cutoff);
+
+  const result = db.prepare('DELETE FROM snapshots WHERE snapshot_time < ?').run(cutoffStr);
+  console.log(`🧹 已清理 ${result.changes} 个旧快照`);
+  return result.changes;
 }
 
 function getAllData() {
-  return loadDB();
+  const snapshots = db.prepare('SELECT id, snapshot_time AS snapshotTime FROM snapshots ORDER BY snapshot_time ASC').all();
+  return {
+    snapshots: snapshots.map((s) => ({
+      snapshotTime: s.snapshotTime,
+      items: getItemsBySnapshotId(s.id)
+    }))
+  };
 }
 
 /**
  * 获取上升最快的热点（对比最近两次快照）
  */
 function getFastestRising(limit = 10, newOnly = false) {
-  const data = loadDB();
-  if (data.snapshots.length < 2) return [];
-  
-  const latest = data.snapshots[data.snapshots.length - 1];
-  const previous = data.snapshots[data.snapshots.length - 2];
+  const latestTwo = db.prepare(`
+    SELECT id, snapshot_time AS snapshotTime
+    FROM snapshots
+    ORDER BY snapshot_time DESC
+    LIMIT 2
+  `).all();
+
+  if (latestTwo.length < 2) return [];
+
+  const latest = latestTwo[0];
+  const previous = latestTwo[1];
+  const latestItems = getItemsBySnapshotId(latest.id);
+  const previousItems = getItemsBySnapshotId(previous.id);
   
   // 建立上次的排名映射
   const prevRankMap = new Map();
-  previous.items.forEach(item => {
+  previousItems.forEach(item => {
     prevRankMap.set(item.topic, item.rank);
   });
   
   // 计算每个热点的排名变化
-  const rising = latest.items.map(item => {
+  const rising = latestItems.map(item => {
     const prevRank = prevRankMap.get(item.topic);
     const rankChange = prevRank ? prevRank - item.rank : null; // 正数表示上升
     const isNew = !prevRank;
     
     return {
       ...item,
+      snapshotTime: latest.snapshotTime,
+      publishedAt: latest.snapshotTime,
       prevRank: prevRank || null,
       rankChange: rankChange,
       isNew: isNew,
@@ -142,19 +272,34 @@ function getFastestRising(limit = 10, newOnly = false) {
  * 如果只有 1 个快照，返回所有热点作为"新上榜"
  */
 function getNewEntries(limit = 10) {
-  const data = loadDB();
+  const snapshotCount = db.prepare('SELECT COUNT(1) AS count FROM snapshots').get().count;
+  if (snapshotCount === 0) return [];
+
+  const latest = db.prepare('SELECT id, snapshot_time AS snapshotTime FROM snapshots ORDER BY snapshot_time DESC LIMIT 1').get();
   
   // 如果只有 1 个快照，返回所有作为新上榜
-  if (data.snapshots.length === 1) {
-    return data.snapshots[0].items.map(item => ({
+  if (snapshotCount === 1 && latest) {
+    const onlySnapshotTime = latest.snapshotTime;
+    return getItemsBySnapshotId(latest.id).map(item => ({
       ...item,
+      snapshotTime: onlySnapshotTime,
+      publishedAt: onlySnapshotTime,
       isNew: true,
       risingSpeed: 999,
       category: categorizeTopic(item.topic)
     })).slice(0, limit);
   }
-  
-  return getFastestRising(limit, true);
+
+  const newEntries = getFastestRising(limit, true);
+  if (newEntries.length > 0) {
+    return newEntries;
+  }
+
+  // 如果本轮没有新上榜，回退到显示最新一轮的上升榜，避免页面空白
+  return getFastestRising(limit, false).map(item => ({
+    ...item,
+    isNew: false
+  }));
 }
 
 /**
@@ -231,12 +376,15 @@ if (process.argv.includes('--init')) {
   process.exit(0);
 }
 
-// 导出 scraper 中的函数（用于 server.js）
-let scraper = null;
-try {
-  scraper = require('./scraper');
-} catch (e) {
-  // 忽略
+init();
+
+// 延迟加载 scraper，避免与 scraper.js 的循环依赖
+function getScraperModule() {
+  try {
+    return require('./scraper');
+  } catch (e) {
+    return null;
+  }
 }
 
 module.exports = {
@@ -252,6 +400,12 @@ module.exports = {
   getNewEntries,
   categorizeTopic,
   // 从 scraper 导出
-  getCachedUserInfo: scraper?.getCachedUserInfo || (() => null),
-  fetchUserInfo: scraper?.fetchUserInfo || (() => null)
+  getCachedUserInfo: () => {
+    const scraper = getScraperModule();
+    return scraper?.getCachedUserInfo ? scraper.getCachedUserInfo() : null;
+  },
+  fetchUserInfo: () => {
+    const scraper = getScraperModule();
+    return scraper?.fetchUserInfo ? scraper.fetchUserInfo() : null;
+  }
 };

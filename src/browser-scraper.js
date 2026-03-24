@@ -3,70 +3,80 @@
  */
 async function fetchHotSearchesViaBrowser() {
   const { execSync } = require('child_process');
+  const sourceUrls = [
+    'https://www.toutiao.com/',
+    'https://www.toutiao.com/?channel=all&source=mine_profile'
+  ];
   
-  console.log('🌐 使用 agent-browser 获取头条热点...');
+  console.log('🌐 使用 agent-browser 获取头条热点（多来源）...');
   
   try {
-    // 1. 打开头条首页
-    console.log('📡 正在访问头条首页...');
-    execSync('agent-browser open "https://www.toutiao.com/"', {
-      stdio: 'pipe',
-      timeout: 30000
-    });
-    
-    // 2. 等待页面加载
-    console.log('⏳ 等待页面加载...');
-    await sleep(10000);
-    
-    // 3. 获取页面快照
-    console.log('📸 正在获取页面快照...');
-    const snapshotOutput = execSync('agent-browser snapshot --json --refs aria', {
-      encoding: 'utf8',
-      timeout: 30000
-    });
-    
-    const snapshot = JSON.parse(snapshotOutput);
-    
-    if (!snapshot.data || !snapshot.data.refs) {
-      console.log('⚠️ 无法获取页面内容');
-      return [];
-    }
-    
-    // 4. 解析热点数据
-    const refs = snapshot.data.refs;
-    const hotSearches = [];
-    
-    // 查找热榜区域
-    let inHotList = false;
-    let rank = 0;
-    
-    Object.values(refs).forEach(v => {
-      if (!v.name || v.name.length < 2 || v.name.length > 100) return;
-      
-      // 检测热榜区域
-      if (v.name.includes('头条热榜') || v.name.includes('热搜')) {
-        inHotList = true;
-        return;
-      }
-      
-      // 解析热榜项目（格式：数字 + 标题）
-      if (inHotList) {
-        const match = v.name.match(/^(\d+)(.*)$/);
-        if (match) {
-          rank = parseInt(match[1]);
-          const title = match[2].trim();
-          if (title.length > 0 && title.length < 80) {
-            hotSearches.push({
-              rank: rank,
-              topic: title,
-              heat: null,
-              trend: rank <= 3 ? 'new' : rank <= 10 ? 'up' : 'stable',
-              category: categorizeTopic(title)
-            });
-          }
+    const mergedByTopic = new Map();
+    let discoveredIndex = 0;
+
+    for (const sourceUrl of sourceUrls) {
+      try {
+        console.log(`📡 正在访问页面：${sourceUrl}`);
+        execSync(`agent-browser open "${sourceUrl}"`, {
+          stdio: 'pipe',
+          timeout: 30000
+        });
+
+        console.log('⏳ 等待页面加载...');
+        await sleep(10000);
+
+        console.log('📸 正在获取页面快照...');
+        const snapshotOutput = execSync('agent-browser snapshot -i --json', {
+          encoding: 'utf8',
+          timeout: 30000
+        });
+
+        const snapshot = JSON.parse(snapshotOutput);
+        if (!snapshot.data || !snapshot.data.snapshot) {
+          console.log(`⚠️ 页面无快照文本：${sourceUrl}`);
+          continue;
         }
+
+        let localItems = [];
+        try {
+          localItems = fetchHotItemsFromDom(execSync);
+        } catch (domError) {
+          console.log(`⚠️ DOM 提取失败，回退到快照解析：${domError.message}`);
+        }
+
+        if (localItems.length === 0) {
+          localItems = extractFromSnapshotText(snapshot.data.snapshot, sourceUrl);
+        }
+        const localCount = localItems.length;
+
+        localItems.forEach((item) => {
+          discoveredIndex += 1;
+          const key = normalizeTopicKey(item.topic);
+          const existing = mergedByTopic.get(key);
+          const next = {
+            ...item,
+            _discoveredIndex: discoveredIndex
+          };
+
+          if (!existing) {
+            mergedByTopic.set(key, next);
+            return;
+          }
+
+          const existingRank = Number.isFinite(existing.rank) ? existing.rank : Number.MAX_SAFE_INTEGER;
+          const nextRank = Number.isFinite(next.rank) ? next.rank : Number.MAX_SAFE_INTEGER;
+          if (nextRank < existingRank) {
+            mergedByTopic.set(key, next);
+          }
+        });
+
+        console.log(`✅ 来源抓取到 ${localCount} 条候选热点：${sourceUrl}`);
+      } catch (err) {
+        console.log(`⚠️ 来源抓取失败，跳过：${sourceUrl} (${err.message})`);
       }
-    });
+    }
+
+    const hotSearches = normalizeHotResults(Array.from(mergedByTopic.values())).slice(0, 50);
     
     // 5. 关闭浏览器
     try {
@@ -74,12 +84,12 @@ async function fetchHotSearchesViaBrowser() {
     } catch (e) {}
     
     if (hotSearches.length > 0) {
-      console.log(`✅ 获取到 ${hotSearches.length} 条热点`);
+      console.log(`✅ 合并后获取到 ${hotSearches.length} 条热点`);
     } else {
       console.log('⚠️ 未获取到热点数据');
     }
     
-    return hotSearches.slice(0, 50);
+    return hotSearches;
     
   } catch (error) {
     console.error('❌ 获取热点失败:', error.message);
@@ -88,6 +98,242 @@ async function fetchHotSearchesViaBrowser() {
     } catch (e) {}
     return [];
   }
+}
+
+function fetchHotItemsFromDom(execSync) {
+  const evalOutput = execSync(`agent-browser eval '${buildHotListEvalScript()}'`, {
+    encoding: 'utf8',
+    timeout: 30000
+  });
+
+  const parsed = JSON.parse(evalOutput.trim());
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  const deduped = new Map();
+  for (const item of parsed) {
+    const normalized = normalizeDomHotItem(item);
+    if (!normalized) continue;
+
+    const key = `${normalizeTopicKey(normalized.topic)}|${normalized.url}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, normalized);
+    }
+  }
+
+  return Array.from(deduped.values());
+}
+
+function buildHotListEvalScript() {
+  return `(() => {
+    const normalize = (value) => String(value || "").trim();
+    const isCandidateHref = (href) => {
+      const value = String(href || "");
+      return value.startsWith("https://www.toutiao.com/trending/")
+        || value.startsWith("https://www.toutiao.com/article/")
+        || value.startsWith("https://www.toutiao.com/video/");
+    };
+    const elements = Array.from(document.querySelectorAll("h1,h2,h3,h4,div,span"));
+    const heading = elements.find((el) => normalize(el.textContent) === "头条热榜");
+
+    const collectAnchors = (root) => Array.from(root.querySelectorAll("a[href]")).map((a) => ({
+      text: normalize(a.textContent),
+      href: a.href
+    })).filter((item) => item.text && isCandidateHref(item.href));
+
+    const candidates = [];
+    let current = heading;
+    for (let depth = 0; depth < 6 && current; depth += 1) {
+      const anchors = collectAnchors(current);
+      const score = anchors.filter((item) => {
+        const firstChar = item.text.slice(0, 1);
+        const startsWithDigit = firstChar >= "0" && firstChar <= "9";
+        return startsWithDigit || item.href.includes("rank=");
+      }).length;
+      candidates.push({ anchors, score });
+      current = current.parentElement;
+    }
+
+    const bestCandidate = candidates.sort((a, b) => b.score - a.score || b.anchors.length - a.anchors.length)[0];
+    const anchors = (bestCandidate && bestCandidate.score > 0 ? bestCandidate.anchors : collectAnchors(document.body)).slice(0, 80);
+
+    return anchors.map((item) => ({
+      text: item.text,
+      href: item.href
+    }));
+  })()`;
+}
+
+function normalizeDomHotItem(item) {
+  const href = canonicalizeToutiaoUrl(item?.href);
+  const text = String(item?.text || '').replace(/\s+/g, ' ').trim();
+  if (!href || !text) return null;
+
+  const parsed = parseHotDomText(text, href);
+  if (!parsed || !parsed.title || !isValidHotTopicTitle(parsed.title)) {
+    return null;
+  }
+
+  return {
+    rank: parsed.rank,
+    topic: parsed.title,
+    heat: null,
+    trend: 'stable',
+    category: categorizeTopic(parsed.title),
+    url: href
+  };
+}
+
+function parseHotDomText(text, href) {
+  const hrefRankMatch = String(href).match(/[?&]rank=(\d{1,2})\b/);
+  const prefixRankMatch = text.match(/^(\d{1,2})(.+)$/);
+
+  let rank = null;
+  let title = text;
+
+  if (hrefRankMatch) {
+    rank = parseInt(hrefRankMatch[1], 10);
+    if (prefixRankMatch) {
+      title = prefixRankMatch[2].trim();
+    }
+  } else if (prefixRankMatch) {
+    const possibleRank = parseInt(prefixRankMatch[1], 10);
+    if (possibleRank >= 1 && possibleRank <= 50) {
+      rank = possibleRank;
+      title = prefixRankMatch[2].trim();
+    }
+  }
+
+  title = cleanTitle(title);
+  if (!title) return null;
+
+  return { rank, title };
+}
+
+function canonicalizeToutiaoUrl(url) {
+  const value = String(url || '').trim();
+  if (!/^https:\/\/www\.toutiao\.com\/(trending|article|video)\//.test(value)) {
+    return null;
+  }
+  return value.replace(/#comment$/, '');
+}
+
+function cleanTitle(title) {
+  return String(title || '')
+    .replace(/^\d{1,2}\s*/, '')
+    .replace(/^[\.、:：\-|｜]+\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractFromSnapshotText(snapshotText, sourceUrl) {
+  const lines = String(snapshotText || '').split('\n');
+  const results = [];
+  let inHotList = false;
+
+  for (const line of lines) {
+    if (line.includes('头条热榜')) {
+      inHotList = true;
+      continue;
+    }
+
+    if (!inHotList) continue;
+
+    // 热榜区块结束标识
+    if (line.includes('热门视频') || line.includes('更多热点') || line.includes('热榜') && line.includes('展开')) {
+      break;
+    }
+
+    const match = line.match(/- link "([^"]+)" \[ref=e\d+\]/);
+    if (!match) continue;
+
+    const parsed = parseHotRefName(match[1]);
+    if (!parsed) continue;
+    if (!isValidHotTopicTitle(parsed.title)) continue;
+
+    results.push({
+      rank: parsed.rank,
+      topic: parsed.title,
+      heat: null,
+      trend: 'stable',
+      category: categorizeTopic(parsed.title),
+      url: null
+    });
+  }
+
+  return results;
+}
+
+function parseHotRefName(rawName) {
+  const text = String(rawName || '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+
+  // 仅接受“排名 + 分隔符 + 标题”，避免把“2025跨年手机推荐”误识别为 rank=2025
+  const strictRankMatch = text.match(/^(\d{1,2})\s*[\.、:：\-|｜]\s*(.+)$/);
+  if (strictRankMatch) {
+    const rank = parseInt(strictRankMatch[1], 10);
+    const title = strictRankMatch[2].trim();
+    if (rank >= 1 && rank <= 50 && title) {
+      return { rank, title };
+    }
+  }
+
+  // 兼容 “1 标题” 的格式（要求有空格）
+  const looseRankMatch = text.match(/^(\d{1,2})\s+(.+)$/);
+  if (looseRankMatch) {
+    const rank = parseInt(looseRankMatch[1], 10);
+    const title = looseRankMatch[2].trim();
+    if (rank >= 1 && rank <= 50 && title) {
+      return { rank, title };
+    }
+  }
+
+  // 没有可靠 rank 时仅返回标题，后续统一重排排名
+  return { rank: null, title: text };
+}
+
+function isValidHotTopicTitle(title) {
+  if (!title) return false;
+  if (title.length < 4 || title.length > 80) return false;
+  if (!/[\u4e00-\u9fa5A-Za-z0-9]/.test(title)) return false;
+  const blacklist = [
+    '头条热榜', '热搜', '热门视频', '登录', '注册', '首页', '更多',
+    '许可证', '备案', '京公网安备', 'ICP', '网信算备', '跟帖评论', '自律管理承诺书',
+    '广播电视节目制作经营许可证', '网络文化经营许可证'
+  ];
+  return !blacklist.some((word) => title === word);
+}
+
+function normalizeTopicKey(topic) {
+  return String(topic || '').replace(/[\s\u3000]+/g, '').trim();
+}
+
+function normalizeHotResults(items) {
+  const sorted = items.sort((a, b) => {
+    const rankA = Number.isFinite(a.rank) ? a.rank : Number.MAX_SAFE_INTEGER;
+    const rankB = Number.isFinite(b.rank) ? b.rank : Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+    return (a._discoveredIndex || Number.MAX_SAFE_INTEGER) - (b._discoveredIndex || Number.MAX_SAFE_INTEGER);
+  });
+
+  let fallbackRank = 1;
+
+  return sorted.map((item, idx) => {
+    while (sorted.some((entry) => Number.isFinite(entry.rank) && entry.rank === fallbackRank)) {
+      fallbackRank += 1;
+    }
+
+    const rank = Number.isFinite(item.rank) ? item.rank : fallbackRank++;
+    return {
+      rank,
+      topic: item.topic,
+      heat: item.heat ?? null,
+      trend: rank <= 3 ? 'new' : rank <= 10 ? 'up' : 'stable',
+      category: item.category || categorizeTopic(item.topic),
+      url: item.url
+    };
+  });
 }
 
 /**

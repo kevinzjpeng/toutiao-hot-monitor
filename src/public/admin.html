@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cookie 管理</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      background: linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #334155 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 32px 20px;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .panel {
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+      backdrop-filter: blur(12px);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+    }
+
+    p {
+      margin: 0 0 16px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .status {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+    }
+
+    .status.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.14);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.28);
+    }
+
+    .status.error {
+      display: block;
+      background: rgba(248, 113, 113, 0.14);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.28);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .meta-card {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .meta-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+
+    .user-summary {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      padding: 14px;
+      resize: vertical;
+      font: 14px/1.6 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 0.92rem;
+      color: #94a3b8;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      color: white;
+    }
+
+    .secondary {
+      background: rgba(148, 163, 184, 0.16);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    pre {
+      margin: 18px 0 0;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      color: #bfdbfe;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 80px;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 20px 14px; }
+      .panel { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="toolbar">
+      <a href="/">← 返回首页</a>
+      <span id="updatedAt">最近保存：未加载</span>
+    </div>
+
+    <div class="panel">
+      <h1>头条 Cookie 管理</h1>
+      <p>将浏览器中复制的完整 Cookie 字符串粘贴到下面。保存后会同步更新 config.json 和 cookies.json，后续抓取与用户信息获取会直接使用这份配置。</p>
+
+      <div id="status" class="status"></div>
+
+      <div class="meta">
+        <div class="meta-card">
+          <strong>已识别 Cookie 数量</strong>
+          <span id="cookieCount">0</span>
+        </div>
+        <div class="meta-card">
+          <strong>关键字段</strong>
+          <span id="cookieKeys">未加载</span>
+        </div>
+      </div>
+
+      <label for="rawCookie">Raw Cookie</label>
+      <textarea id="rawCookie" placeholder="例如：sessionid=...; sid_tt=...; ttwid=...;"></textarea>
+      <div class="hint">建议至少包含 sessionid、sid_tt、ttwid、toutiao_sso_user 等关键字段。</div>
+
+      <div class="actions">
+        <button class="primary" id="saveBtn" onclick="saveCookie()">保存 Cookie</button>
+        <button class="secondary" onclick="loadCookie()">重新加载</button>
+      </div>
+
+      <div id="userSummary" class="user-summary">用户信息待刷新</div>
+
+      <pre id="preview">Cookie 预览加载中...</pre>
+    </div>
+  </div>
+
+  <script>
+    function setStatus(message, type) {
+      const status = document.getElementById('status');
+      status.className = `status ${type}`;
+      status.textContent = message;
+    }
+
+    function renderCookieSummary(data) {
+      const cookies = data && data.cookies ? data.cookies : {};
+      const entries = Object.entries(cookies);
+      document.getElementById('cookieCount').textContent = String(entries.length);
+      document.getElementById('cookieKeys').textContent = entries.length ? entries.slice(0, 6).map(([key]) => key).join('、') : '无';
+      document.getElementById('updatedAt').textContent = `最近保存：${data.updatedAt || '未知'}`;
+      document.getElementById('preview').textContent = JSON.stringify(cookies, null, 2);
+
+      const summaryEl = document.getElementById('userSummary');
+      if (data && data.userInfo) {
+        const info = data.userInfo;
+        summaryEl.textContent = `自动刷新用户信息成功：${info.name || '未命名用户'} | 粉丝 ${info.fans ?? '-'} | 关注 ${info.follow ?? '-'} | 获赞 ${info.likes ?? '-'} `;
+      }
+    }
+
+    async function loadCookie() {
+      try {
+        const response = await fetch('/api/admin/cookies');
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.message || '加载失败');
+        }
+
+        document.getElementById('rawCookie').value = result.data.rawCookie || '';
+        renderCookieSummary(result.data);
+        setStatus('已加载当前 Cookie 配置', 'success');
+      } catch (error) {
+        setStatus(`加载失败：${error.message}`, 'error');
+      }
+    }
+
+    async function saveCookie() {
+      const button = document.getElementById('saveBtn');
+      const rawCookie = document.getElementById('rawCookie').value.trim();
+
+      button.disabled = true;
+      button.textContent = '保存中...';
+
+      try {
+        const response = await fetch('/api/admin/cookies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawCookie })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || '保存失败');
+        }
+
+        renderCookieSummary(result.data);
+        setStatus(result.message || 'Cookie 已保存', 'success');
+
+        if (!result.data || !result.data.userInfo) {
+          document.getElementById('userSummary').textContent = '已保存 Cookie，但未获取到用户信息，请确认 Cookie 有效且账号已登录。';
+        }
+      } catch (error) {
+        setStatus(`保存失败：${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = '保存 Cookie';
+      }
+    }
+
+    loadCookie();
+  </script>
+</body>
+</html>
