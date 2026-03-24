@@ -1,0 +1,26 @@
+{
+  "scrapeInterval": "*/10 * * * *",
+  "dataRetentionDays": 7,
+  "port": 3000,
+  "toutiaoUrl": "https://www.toutiao.com/",
+  "cookies": {
+    "tt_webid": "7619515773816096302",
+    "sessionid": "210ae256e29211d6e618df2a13159f87",
+    "sid_tt": "210ae256e29211d6e618df2a13159f87",
+    "passport_auth_status": "7334c91326ab73eb367c5038b6321544,ac020660c595698fcc97ba4c0c738a1f",
+    "toutiao_sso_user": "7e7c4a3dc6eac604c1356d960a617662",
+    "uid_tt": "a7f587d8ce1dacdac7e48a410dbbe474",
+    "ttwid": "1%7C_2yjXfutgPyIJvsQkCgxPeit7DAjdluaKC2DhtkxiFg%7C1774313795%7C7037b4761cdf8e0b78e709ae6bca7d457e288e2673fb02cc78d4ab5f9932357a"
+  },
+  "mpRequest": {
+    "mode": "agent-browser",
+    "fallbackToHttp": true,
+    "url": "https://mp.toutiao.com/monitor_browser/collect/batch/?biz_id=toutiao_mp",
+    "rawHeaders": "",
+    "rawCookie": "",
+    "body": {
+      "events": []
+    },
+    "timeoutMs": 30000
+  }
+}

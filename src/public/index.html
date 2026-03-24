@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔥 头条热点监测</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+    
+    header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .status-bar {
+      background: rgba(255,255,255,0.2);
+      padding: 15px 25px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .status-bar span {
+      color: white;
+      font-size: 0.95em;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .tab {
+      background: rgba(255,255,255,0.3);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: all 0.3s;
+      backdrop-filter: blur(10px);
+    }
+    
+    .tab:hover {
+      background: rgba(255,255,255,0.4);
+      transform: translateY(-2px);
+    }
+    
+    .tab.active {
+      background: #4CAF50;
+      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+    }
+    
+    .refresh-btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: all 0.3s;
+    }
+    
+    .refresh-btn:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+    }
+    
+    .refresh-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .category-filter {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .category-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: all 0.3s;
+    }
+    
+    .category-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    
+    .category-btn.active {
+      background: #FF6B6B;
+      border-color: #FF6B6B;
+    }
+    
+    .hotspot-list {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .hotspot-item {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      border-bottom: 1px solid #eee;
+      transition: background 0.2s;
+    }
+    
+    .hotspot-item:hover {
+      background: #f8f9fa;
+    }
+    
+    .hotspot-item:last-child {
+      border-bottom: none;
+    }
+    
+    .rank {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.2em;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+    
+    .rank-1 { background: #FFD700; color: #333; }
+    .rank-2 { background: #C0C0C0; color: #333; }
+    .rank-3 { background: #CD7F32; color: #333; }
+    .rank-other { background: #f0f0f0; color: #666; }
+    
+    .topic {
+      flex: 1;
+      font-size: 1.1em;
+      color: #333;
+    }
+    
+    .category-tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: 500;
+      margin-left: 15px;
+    }
+    
+    .cat-政治 { background: #FF6B6B; color: white; }
+    .cat-财经 { background: #4ECDC4; color: white; }
+    .cat-科技 { background: #45B7D1; color: white; }
+    .cat-体育 { background: #FFA07A; color: white; }
+    .cat-娱乐 { background: #DDA0DD; color: white; }
+    .cat-社会 { background: #98D8C8; color: #333; }
+    .cat-国际 { background: #F7DC6F; color: #333; }
+    .cat-健康 { background: #82E0AA; color: #333; }
+    .cat-其他 { background: #BDC3C7; color: #333; }
+    
+    .rank-change {
+      font-size: 1.3em;
+      margin-left: 15px;
+      font-weight: bold;
+    }
+    
+    .rank-new { color: #2ecc71; }
+    
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: white;
+      font-size: 1.2em;
+    }
+    
+    .error {
+      background: #e74c3c;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .section-title {
+      color: white;
+      font-size: 1.5em;
+      margin-bottom: 15px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .stats-bar {
+      background: rgba(255,255,255,0.2);
+      padding: 15px 25px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    
+    .stat-item {
+      color: white;
+    }
+    
+    .stat-value {
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+    
+    .stat-label {
+      font-size: 0.9em;
+      opacity: 0.9;
+    }
+    
+    @media (max-width: 768px) {
+      header h1 { font-size: 1.8em; }
+      .hotspot-item { flex-wrap: wrap; }
+      .category-tag { margin-left: 55px; margin-top: 10px; }
+      .rank-change { margin-left: 55px; margin-top: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div id="userInfo" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">
+        <img id="userAvatar" src="" alt="" style="width: 40px; height: 40px; border-radius: 50%; display: none;">
+        <div id="userName" style="color: white; font-weight: bold;"></div>
+        <div id="userStats" style="color: rgba(255,255,255,0.8); font-size: 0.9em;"></div>
+      </div>
+      <h1>🔥 头条热点监测</h1>
+      <p>每 10 分钟自动更新 · 保留 7 天数据</p>
+    </header>
+    
+    <div class="status-bar">
+      <span id="lastUpdate">最后更新：加载中...</span>
+      <button class="refresh-btn" onclick="loadData()" id="refreshBtn">🔄 刷新</button>
+    </div>
+    
+    <div class="stats-bar" id="statsBar" style="display: none;">
+      <div class="stat-item">
+        <div class="stat-value" id="statNew">0</div>
+        <div class="stat-label">🆕 新上榜</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statCategories">0</div>
+        <div class="stat-label">📁 分类数</div>
+      </div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('new')" id="tab-new">🆕 新上榜</button>
+      <button class="tab" onclick="switchTab('rising')" id="tab-rising">🚀 上升最快</button>
+      <button class="tab" onclick="switchTab('hot')" id="tab-hot">🔥 最热榜单</button>
+    </div>
+    
+    <div class="category-filter" id="categoryFilter" style="display: none;">
+      <button class="category-btn active" onclick="filterCategory('all')" data-cat="all">全部</button>
+    </div>
+    
+    <h2 class="section-title" id="sectionTitle">🆕 新上榜热点</h2>
+    
+    <div id="errorBox" class="error" style="display: none;"></div>
+    
+    <div class="hotspot-list" id="hotspotList">
+      <div class="loading">正在加载热点数据...</div>
+    </div>
+  </div>
+  
+  <script>
+    let currentTab = 'new';
+    let currentCategory = 'all';
+    let allCategories = [];
+    
+    async function switchTab(tab) {
+      currentTab = tab;
+      currentCategory = 'all';
+      
+      // 更新按钮状态
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      
+      // 更新标题
+      const titles = {
+        'new': '🆕 新上榜热点',
+        'rising': '🚀 上升最快（10 分钟内）',
+        'hot': '🔥 当前最热'
+      };
+      document.getElementById('sectionTitle').textContent = titles[tab];
+      
+      // 分类筛选器只在"新上榜"标签显示
+      document.getElementById('categoryFilter').style.display = (tab === 'new') ? 'flex' : 'none';
+      
+      // 加载数据
+      loadData();
+    }
+    
+    async function filterCategory(cat) {
+      currentCategory = cat;
+      
+      document.querySelectorAll('.category-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.cat === cat);
+      });
+      
+      loadData();
+    }
+    
+    async function loadCategories() {
+      try {
+        const response = await fetch('/api/categories');
+        const result = await response.json();
+        
+        if (result.success) {
+          allCategories = result.data;
+          renderCategoryFilter(result.data);
+          
+          // 更新统计
+          const totalNew = result.data.reduce((sum, c) => sum + c.count, 0);
+          document.getElementById('statNew').textContent = totalNew;
+          document.getElementById('statCategories').textContent = result.data.length;
+          document.getElementById('statsBar').style.display = 'flex';
+        }
+      } catch (error) {
+        console.error('加载分类失败:', error);
+      }
+    }
+    
+    function renderCategoryFilter(categories) {
+      const container = document.getElementById('categoryFilter');
+      let html = '<button class="category-btn active" onclick="filterCategory(\'all\')" data-cat="all">全部</button>';
+      
+      categories.forEach(cat => {
+        html += `<button class="category-btn" onclick="filterCategory('${cat.name}')" data-cat="${cat.name}">${cat.name} (${cat.count})</button>`;
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    async function loadData() {
+      const refreshBtn = document.getElementById('refreshBtn');
+      const hotspotList = document.getElementById('hotspotList');
+      const errorBox = document.getElementById('errorBox');
+      
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ 加载中...';
+      errorBox.style.display = 'none';
+      
+      try {
+        let url;
+        if (currentTab === 'new') {
+          url = '/api/new';
+          if (currentCategory !== 'all') {
+            url += `?category=${encodeURIComponent(currentCategory)}`;
+          }
+        } else if (currentTab === 'rising') {
+          url = '/api/rising?new=true';
+        } else {
+          url = '/api/hotspots';
+        }
+        
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.success && result.data.length > 0) {
+          renderList(result.data);
+          
+          // 如果是新上榜，加载分类
+          if (currentTab === 'new') {
+            loadCategories();
+          }
+        } else {
+          hotspotList.innerHTML = '<div class="loading">暂无数据，等待首次抓取...</div>';
+        }
+      } catch (error) {
+        errorBox.textContent = '加载失败：' + error.message;
+        errorBox.style.display = 'block';
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 刷新';
+      }
+    }
+    
+    function renderList(hotspots) {
+      const hotspotList = document.getElementById('hotspotList');
+      const lastUpdate = document.getElementById('lastUpdate');
+      
+      if (hotspots.length > 0 && hotspots[0].snapshotTime) {
+        lastUpdate.textContent = '最后更新：' + new Date(hotspots[0].snapshotTime).toLocaleString('zh-CN');
+      } else {
+        lastUpdate.textContent = '最后更新：' + new Date().toLocaleString('zh-CN');
+      }
+      
+      let html = '';
+      hotspots.forEach((item, index) => {
+        const rankClass = index < 3 ? `rank-${index + 1}` : 'rank-other';
+        const categoryClass = `cat-${item.category}`;
+        
+        html += `
+          <div class="hotspot-item">
+            <div class="rank ${rankClass}">${item.rank}</div>
+            <div class="topic">${escapeHtml(item.topic)}</div>
+            <span class="category-tag ${categoryClass}">${item.category}</span>
+            <div class="rank-change rank-new">🆕 NEW</div>
+          </div>
+        `;
+      });
+      
+      hotspotList.innerHTML = html;
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // 页面加载时获取数据
+    switchTab('new');
+    loadUserInfo();
+    
+    // 每 10 分钟自动刷新
+    setInterval(loadData, 600000);
+    
+    async function showArticles() {
+      const hotspotList = document.getElementById('hotspotList');
+      const sectionTitle = document.getElementById('sectionTitle');
+      
+      sectionTitle.textContent = '📝 我的文章';
+      hotspotList.innerHTML = '<div class="loading">正在加载文章列表...</div>';
+      
+      try {
+        const response = await fetch('/api/user/articles');
+        const result = await response.json();
+        
+        if (result.success && result.data.length > 0) {
+          let html = '';
+          result.data.forEach((article, index) => {
+            html += `
+              <div class="hotspot-item">
+                <div class="rank rank-other">${index + 1}</div>
+                <div class="topic">${escapeHtml(article.title)}</div>
+              </div>
+            `;
+          });
+          hotspotList.innerHTML = html;
+        } else {
+          hotspotList.innerHTML = '<div class="loading">该用户暂未发表文章</div>';
+        }
+      } catch (error) {
+        hotspotList.innerHTML = '<div class="loading">加载失败：' + error.message + '</div>';
+      }
+    }
+    
+    async function loadUserInfo() {
+      try {
+        const response = await fetch('/api/user');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          const { name, avatar, fans, follow, likes } = result.data;
+          
+          const avatarEl = document.getElementById('userAvatar');
+          const nameEl = document.getElementById('userName');
+          const statsEl = document.getElementById('userStats');
+          
+          if (avatar) {
+            avatarEl.src = avatar.startsWith('http') ? avatar : 'https:' + avatar;
+            avatarEl.style.display = 'block';
+          }
+          
+          nameEl.textContent = name || '未登录';
+          
+          if (fans !== null && follow !== null && likes !== null) {
+            statsEl.textContent = `粉丝：${formatNumber(fans)} | 关注：${formatNumber(follow)} | 获赞：${formatNumber(likes)}`;
+          }
+        }
+      } catch (error) {
+        console.error('加载用户信息失败:', error);
+      }
+    }
+    
+    function formatNumber(num) {
+      if (num >= 10000) {
+        return (num / 10000).toFixed(1) + 'w';
+      }
+      return num.toString();
+    }
+  </script>
+</body>
+</html>

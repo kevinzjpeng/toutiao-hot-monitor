@@ -1,0 +1,664 @@
+{
+  "snapshots": [
+    {
+      "snapshotTime": "2026-03-23 23:54:15",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "金正恩：将继续巩固拥核国家地位，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:00:00",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "金正恩：将继续巩固拥核国家地位，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:10:00",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会，新事件上榜",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "金正恩：将继续巩固拥核国家地位，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:16:33",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "金正恩：将继续巩固拥核国家地位，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:17:22",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "金正恩：将继续巩固拥核国家地位，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:20:00",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "金正恩：将继续巩固拥核国家地位",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:20:07",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "菜百有人卖金套现后拉行李箱离开",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "金正恩：将继续巩固拥核国家地位",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:40:00",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "对国内成品油价格采取临时调控，热门事件",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "金正恩：将继续巩固拥核国家地位",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "姚洋：中美关系正在出现三个新信号，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:42:43",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 2,
+          "topic": "“山东4人入室抢婴案”二审今日宣判",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 3,
+          "topic": "金正恩：将继续巩固拥核国家地位",
+          "heat": null,
+          "trend": "new"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 5,
+          "topic": "姚洋：中美关系正在出现三个新信号，新事件上榜",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 6,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 9,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up"
+        },
+        {
+          "rank": 10,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up"
+        }
+      ]
+    },
+    {
+      "snapshotTime": "2026-03-24 00:45:47",
+      "items": [
+        {
+          "rank": 1,
+          "topic": "习近平在河北雄安新区考察",
+          "heat": null,
+          "trend": "new",
+          "category": "政治"
+        },
+        {
+          "rank": 2,
+          "topic": "泄密可能就藏在“没拉窗帘”，新事件上榜",
+          "heat": null,
+          "trend": "new",
+          "category": "其他"
+        },
+        {
+          "rank": 3,
+          "topic": "金正恩：将继续巩固拥核国家地位",
+          "heat": null,
+          "trend": "new",
+          "category": "政治"
+        },
+        {
+          "rank": 4,
+          "topic": "科技春耕与春日经济共绘希望田野",
+          "heat": null,
+          "trend": "up",
+          "category": "财经"
+        },
+        {
+          "rank": 5,
+          "topic": "姚洋：中美关系正在出现三个新信号，新事件上榜",
+          "heat": null,
+          "trend": "up",
+          "category": "财经"
+        },
+        {
+          "rank": 6,
+          "topic": "“活鱼麻醉”涉事商户被立案调查，热议",
+          "heat": null,
+          "trend": "up",
+          "category": "社会"
+        },
+        {
+          "rank": 7,
+          "topic": "美伊会谈“罗生门”，热门事件",
+          "heat": null,
+          "trend": "up",
+          "category": "政治"
+        },
+        {
+          "rank": 8,
+          "topic": "“梅姨”长相已发生很大变化",
+          "heat": null,
+          "trend": "up",
+          "category": "其他"
+        },
+        {
+          "rank": 9,
+          "topic": "郑钦文不敌萨巴伦卡，热门事件",
+          "heat": null,
+          "trend": "up",
+          "category": "体育"
+        },
+        {
+          "rank": 10,
+          "topic": "余承东首次缺席鸿蒙智行发布会",
+          "heat": null,
+          "trend": "up",
+          "category": "科技"
+        }
+      ]
+    }
+  ]
+}
