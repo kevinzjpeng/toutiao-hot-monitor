@@ -346,6 +346,70 @@ async function dismissTips(driver) {
   return clickButtonByText(driver, '我知道了|知道了|关闭|稍后再说');
 }
 
+async function captureScreenArtifact(driver, label = 'snapshot') {
+  const ts = Date.now();
+  const safeLabel = String(label || 'snapshot').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const screenshotPath = `/tmp/toutiao-selenium-${safeLabel}-${ts}.png`;
+  const screenshot = await driver.takeScreenshot();
+  fs.writeFileSync(screenshotPath, screenshot, 'base64');
+  return screenshotPath;
+}
+
+async function preparePrePublishScreenshotView(driver) {
+  let settingsClickedText = null;
+  try {
+    settingsClickedText = await clickButtonByText(driver, '发文设置|发布设置');
+  } catch (error) {
+    settingsClickedText = null;
+  }
+
+  try {
+    await driver.sleep(600);
+    await driver.executeScript(
+      `
+      const inScrollable = (el) => {
+        if (!el) return false;
+        return el.scrollHeight > el.clientHeight + 20;
+      };
+
+      const candidates = [
+        document.querySelector('.arco-modal-body'),
+        document.querySelector('.byte-modal-body'),
+        document.querySelector('[role="dialog"] .arco-modal-body'),
+        document.querySelector('[role="dialog"] .byte-modal-body'),
+        document.querySelector('[role="dialog"] .content'),
+        document.querySelector('[class*="setting"] .content'),
+        document.scrollingElement,
+        document.documentElement,
+        document.body
+      ].filter(Boolean);
+
+      let scrolled = false;
+      for (const el of candidates) {
+        if (!inScrollable(el) && el !== document.body && el !== document.documentElement && el !== document.scrollingElement) {
+          continue;
+        }
+        try {
+          el.scrollTop = el.scrollHeight;
+          scrolled = true;
+        } catch (e) {}
+      }
+
+      window.scrollTo(0, document.body.scrollHeight || 99999);
+      return { scrolled };
+      `
+    );
+    await driver.sleep(450);
+  } catch (error) {
+    // Ignore scroll preparation failure.
+  }
+
+  return {
+    settingsClicked: Boolean(settingsClickedText),
+    settingsClickedText
+  };
+}
+
 async function enableAdvertisementOption(driver) {
   return driver.executeScript(
     `
@@ -400,6 +464,96 @@ async function enableAdvertisementOption(driver) {
       attempted: true,
       clicked,
       enabled: clicked.length > 0
+    };
+    `
+  );
+}
+
+async function enableRequiredPublishSettings(driver) {
+  return driver.executeScript(
+    `
+    const normalize = (text) => String(text || '').replace(/\s+/g, '').trim();
+    const isVisible = (el) => {
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 1 && rect.height > 1;
+    };
+    const isChecked = (el) => {
+      if (!el) return false;
+      if (el.matches && el.matches('input[type="checkbox"], input[type="radio"]')) {
+        return !!el.checked;
+      }
+      const ariaChecked = el.getAttribute && el.getAttribute('aria-checked');
+      if (ariaChecked === 'true') return true;
+      const ariaPressed = el.getAttribute && el.getAttribute('aria-pressed');
+      if (ariaPressed === 'true') return true;
+      const className = String(el.className || '');
+      return /checked|selected|active|open|on/.test(className);
+    };
+
+    const targets = [
+      '授权平台自动维权',
+      '作品声明取材网络，个人观点，仅供馋哭',
+      '引用AI'
+    ];
+
+    const clickableRoots = Array.from(document.querySelectorAll(
+      'label, .arco-form-item, .byte-form-item, .form-item, .setting-item, [role="dialog"], .arco-modal, .byte-modal, div'
+    ));
+
+    const clicked = [];
+    const missing = [];
+
+    const tryClickByText = (target) => {
+      const targetNorm = normalize(target);
+      const candidates = clickableRoots
+        .filter(isVisible)
+        .filter((el) => {
+          const text = normalize(el.innerText || el.textContent || '');
+          return text && text.includes(targetNorm);
+        })
+        .sort((a, b) => {
+          const aLen = normalize(a.innerText || a.textContent || '').length;
+          const bLen = normalize(b.innerText || b.textContent || '').length;
+          return aLen - bLen;
+        });
+
+      for (const root of candidates) {
+        const toggle = root.matches && root.matches('input[type="checkbox"], [role="switch"], [role="checkbox"], .arco-switch, .byte-switch')
+          ? root
+          : root.querySelector('input[type="checkbox"], [role="switch"], [role="checkbox"], .arco-switch, .byte-switch');
+
+        if (toggle) {
+          if (isChecked(toggle)) {
+            return true;
+          }
+          try {
+            toggle.click();
+            clicked.push(target);
+            return true;
+          } catch (e) {}
+        }
+
+        try {
+          root.click();
+          clicked.push(target);
+          return true;
+        } catch (e) {}
+      }
+
+      return false;
+    };
+
+    for (const target of targets) {
+      if (!tryClickByText(target)) {
+        missing.push(target);
+      }
+    }
+
+    return {
+      attempted: true,
+      clicked,
+      missing
     };
     `
   );
@@ -709,10 +863,23 @@ async function saveDraftArticleViaSelenium(options = {}) {
   if (chromeDebuggerAddress) {
     chromeOptions.debuggerAddress(chromeDebuggerAddress);
   } else {
+    const profileDir = `/tmp/toutiao-selenium-profile-${Date.now()}`;
     if (headless) {
       chromeOptions.addArguments('--headless=new');
     }
-    chromeOptions.addArguments('--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--window-size=1440,900');
+    chromeOptions.addArguments(
+      '--disable-gpu',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--remote-debugging-port=9222',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-networking',
+      '--disable-extensions',
+      '--window-size=1440,900',
+      `--user-data-dir=${profileDir}`
+    );
   }
 
   const chromeBinary = process.env.CHROME_BIN || options.chromeBinary;
@@ -963,11 +1130,12 @@ async function saveDraftArticleViaSelenium(options = {}) {
       `,
       title,
       content,
-      publishMode ? 'publish' : (!autoSaveOnly ? 'draft' : 'none'),
+      publishMode ? 'none' : (!autoSaveOnly ? 'draft' : 'none'),
       useCoverImage
     );
 
     let normalizedResult = result;
+    let prePublishScreenshotPath = null;
 
     let coverUpload = null;
     if (useCoverImage) {
@@ -983,6 +1151,17 @@ async function saveDraftArticleViaSelenium(options = {}) {
           ...normalizedResult,
           coverUpload
         };
+      }
+    }
+
+    if (publishMode) {
+      try {
+        await preparePrePublishScreenshotView(driver);
+        await enableRequiredPublishSettings(driver);
+        await enableAdvertisementOption(driver);
+        prePublishScreenshotPath = await captureScreenArtifact(driver, 'before-publish');
+      } catch (error) {
+        prePublishScreenshotPath = null;
       }
     }
 
@@ -1015,6 +1194,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
     if (publishMode && normalizedResult && normalizedResult.clickedButtonText) {
       try {
         await driver.sleep(1200);
+        await enableRequiredPublishSettings(driver);
         await enableAdvertisementOption(driver);
         await driver.executeScript(
           `
@@ -1397,6 +1577,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
       title,
       cookieSetCount,
       chromeDebuggerAddress: chromeDebuggerAddress || null,
+      prePublishScreenshotPath,
       currentUrl,
       pageTitle,
       cover: {
