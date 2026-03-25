@@ -6,6 +6,33 @@ const baseConfig = require('../config.json');
 const LOCAL_MP_CONFIG_PATH = path.join(__dirname, '../mp-request.local.json');
 const DEFAULT_MP_URL = 'https://mp.toutiao.com/monitor_browser/collect/batch/?biz_id=toutiao_mp';
 const DEFAULT_PUBLISH_URL = 'https://mp.toutiao.com/mp/agw/article/publish?source=mp&type=article&aid=1231';
+const DEFAULT_WEITOUTIAO_PUBLISH_URL = 'https://mp.toutiao.com/mp/agw/article/publish?source=mp&type=weitoutiao&aid=1231';
+
+function normalizePublishType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'article';
+  if (['weitoutiao', 'micro', 'micro-post', 'wtt'].includes(raw)) {
+    return 'weitoutiao';
+  }
+  return 'article';
+}
+
+function resolvePublishUrl(runtimeOptions = {}, parsedHeaders = {}) {
+  const explicitRuntimeUrl = runtimeOptions.runtimeUrl || runtimeOptions.publishUrl || runtimeOptions.explicitPublishUrl;
+  if (explicitRuntimeUrl && String(explicitRuntimeUrl).trim()) {
+    return String(explicitRuntimeUrl).trim();
+  }
+
+  if (parsedHeaders[':scheme'] && parsedHeaders[':authority'] && parsedHeaders[':path']) {
+    return buildUrlFromPseudoHeaders(parsedHeaders, DEFAULT_PUBLISH_URL);
+  }
+
+  const publishType = normalizePublishType(runtimeOptions.publishType);
+  if (publishType === 'weitoutiao') {
+    return DEFAULT_WEITOUTIAO_PUBLISH_URL;
+  }
+  return DEFAULT_PUBLISH_URL;
+}
 
 function parseRawHeaderPairs(rawText) {
   if (!rawText || typeof rawText !== 'string') {
@@ -302,8 +329,13 @@ function normalizePublishBodyFromTemplate(runtimeOptions = {}) {
     return null;
   }
 
+  const publishType = normalizePublishType(runtimeOptions.publishType);
   const title = (runtimeOptions.title || '').trim();
   const htmlContent = (runtimeOptions.htmlContent || '').trim() || buildHtmlParagraphContent(runtimeOptions.content || '');
+  const fallbackTitle = !title && publishType === 'weitoutiao'
+    ? stripHtmlToText(htmlContent).slice(0, 30)
+    : '';
+  const effectiveTitle = title || fallbackTitle;
   const form = new URLSearchParams(template.body);
   const changes = [];
 
@@ -321,8 +353,8 @@ function normalizePublishBodyFromTemplate(runtimeOptions = {}) {
     }
   };
 
-  if (title) {
-    setValue('title', title);
+  if (effectiveTitle) {
+    setValue('title', effectiveTitle);
   }
 
   if (htmlContent) {
@@ -366,6 +398,7 @@ function normalizePublishBodyFromTemplate(runtimeOptions = {}) {
     normalization: {
       mode: 'template',
       source: template.source,
+      publishType,
       changedKeys: Array.from(new Set(changes)),
       publishOptions: publishOptionsPatch
     }
@@ -378,10 +411,15 @@ function buildPublishFormBody(runtimeOptions = {}) {
     return normalized;
   }
 
+  const publishType = normalizePublishType(runtimeOptions.publishType);
   const title = (runtimeOptions.title || '').trim();
   const content = (runtimeOptions.content || '').trim();
+  const fallbackTitle = !title && publishType === 'weitoutiao'
+    ? content.slice(0, 30)
+    : '';
+  const effectiveTitle = title || fallbackTitle;
 
-  if (!title || !content) {
+  if (!effectiveTitle || !content) {
     throw new Error('publish 请求缺少 rawBody，且未提供 title/content 用于构造表单');
   }
 
@@ -406,7 +444,7 @@ function buildPublishFormBody(runtimeOptions = {}) {
   form.set('source', String(runtimeOptions.source || 29));
   form.set('extra', JSON.stringify(extra));
   form.set('content', htmlContent);
-  form.set('title', title);
+  form.set('title', effectiveTitle);
   form.set('search_creation_info', JSON.stringify(runtimeOptions.searchCreationInfo || {}));
   const publishOptionsPatch = ensurePublishOptionsEnabled(form, runtimeOptions);
 
@@ -415,6 +453,7 @@ function buildPublishFormBody(runtimeOptions = {}) {
     normalization: {
       mode: 'basic',
       source: 'generated',
+      publishType,
       publishOptions: publishOptionsPatch
     }
   };
@@ -1027,10 +1066,9 @@ async function uploadCoverAndInject(rawBody, requestHeaders, runtimeOptions, tim
 async function publishDraftViaHttp(runtimeOptions = {}) {
   const options = resolveMpRequestOptions(runtimeOptions);
   const parsedHeaders = parseRawHeaderPairs(options.rawHeaders || '');
+  const publishType = normalizePublishType(options.publishType);
 
-  const requestUrl =
-    runtimeOptions.url ||
-    buildUrlFromPseudoHeaders(parsedHeaders, DEFAULT_PUBLISH_URL);
+  const requestUrl = resolvePublishUrl(runtimeOptions, parsedHeaders);
 
   const requestHeaders = toRequestHeaders(parsedHeaders, options.rawCookie);
   const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 30000;
@@ -1139,6 +1177,7 @@ async function publishDraftViaHttp(runtimeOptions = {}) {
     status: response.status,
     statusText: response.statusText,
     mode: 'http-replay',
+    publishType,
     url: requestUrl,
     code,
     attempts,
@@ -1147,6 +1186,13 @@ async function publishDraftViaHttp(runtimeOptions = {}) {
     message: data && (data.message || data.reason) ? (data.message || data.reason) : null,
     data
   };
+}
+
+async function publishWeitoutiaoViaHttp(runtimeOptions = {}) {
+  return publishDraftViaHttp({
+    ...runtimeOptions,
+    publishType: 'weitoutiao'
+  });
 }
 
 async function sendViaAgentBrowser(requestUrl, requestHeaders, requestBody, options) {
@@ -1479,5 +1525,6 @@ module.exports = {
   parseRawHeaderPairs,
   sendMpCollectBatch,
   saveDraftArticleViaAgentBrowser,
-  publishDraftViaHttp
+  publishDraftViaHttp,
+  publishWeitoutiaoViaHttp
 };

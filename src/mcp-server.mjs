@@ -205,6 +205,53 @@ const tools = [
       required: ['id'],
       additionalProperties: false
     }
+  },
+  {
+    name: 'publish_weitoutiao_http',
+    description: 'Publish 微头条 via /api/mp/weitoutiao/publish/http',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        content: { type: 'string' },
+        coverImageUrl: { type: 'string' },
+        sourceUrl: { type: 'string' },
+        rawBody: { type: 'string' },
+        rawBodyTemplate: { type: 'string' },
+        rawBodyTemplatePath: { type: 'string' },
+        rawHeaders: { type: 'string' },
+        rawCookie: { type: 'string' },
+        timeoutMs: { type: 'number' },
+        enableAdvertisement: { type: 'boolean' },
+        enableToutiaoFirstPublish: { type: 'boolean' }
+      },
+      required: ['content'],
+      additionalProperties: true
+    }
+  },
+  {
+    name: 'publish_mp_http',
+    description: 'Generic publish via /api/mp/publish/http, supports publishType=article|weitoutiao',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        publishType: { type: 'string' },
+        title: { type: 'string' },
+        content: { type: 'string' },
+        coverImageUrl: { type: 'string' },
+        sourceUrl: { type: 'string' },
+        rawBody: { type: 'string' },
+        rawBodyTemplate: { type: 'string' },
+        rawBodyTemplatePath: { type: 'string' },
+        rawHeaders: { type: 'string' },
+        rawCookie: { type: 'string' },
+        timeoutMs: { type: 'number' },
+        enableAdvertisement: { type: 'boolean' },
+        enableToutiaoFirstPublish: { type: 'boolean' }
+      },
+      required: ['content'],
+      additionalProperties: true
+    }
   }
 ];
 
@@ -289,6 +336,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'delete_pending_article') {
       const result = await apiRequest(`/api/publish-queue/${Number(args.id)}`, {
         method: 'DELETE'
+      });
+      return textResult(result);
+    }
+
+    if (name === 'publish_weitoutiao_http') {
+      const payload = {
+        enableAdvertisement: true,
+        enableToutiaoFirstPublish: true,
+        ...args
+      };
+
+      const result = await apiRequest('/api/mp/weitoutiao/publish/http', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return textResult(result);
+    }
+
+    if (name === 'publish_mp_http') {
+      const payload = {
+        enableAdvertisement: true,
+        enableToutiaoFirstPublish: true,
+        ...args
+      };
+
+      const result = await apiRequest('/api/mp/publish/http', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
       });
       return textResult(result);
     }

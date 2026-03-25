@@ -728,6 +728,36 @@ app.post('/api/mp/article/publish/http', async (req, res) => {
   }
 });
 
+// API: 直接回放桌面浏览器的 publish 请求以发布微头条
+app.post('/api/mp/weitoutiao/publish/http', async (req, res) => {
+  try {
+    const { publishWeitoutiaoViaHttp } = require('./mp-client');
+    console.log('📨 正在回放 publish 请求发布微头条...');
+
+    const result = await publishWeitoutiaoViaHttp(req.body || {});
+
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// API: 通用发布接口（article / weitoutiao）
+app.post('/api/mp/publish/http', async (req, res) => {
+  try {
+    const { publishDraftViaHttp } = require('./mp-client');
+    const payload = req.body || {};
+    const publishType = String(payload.publishType || 'article').trim().toLowerCase();
+    console.log(`📨 正在回放 publish 请求，类型: ${publishType}`);
+
+    const result = await publishDraftViaHttp(payload);
+
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // API: 清理旧数据
 app.post('/api/cleanup', (req, res) => {
   try {
