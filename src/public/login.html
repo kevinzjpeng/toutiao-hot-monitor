@@ -23,6 +23,15 @@
     </form>
   </div>
   <script>
+    function getRedirectTarget() {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect');
+      if (!redirect || !redirect.startsWith('/')) {
+        return '/';
+      }
+      return redirect;
+    }
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const u = document.getElementById('username').value;
@@ -33,7 +42,7 @@
         body: JSON.stringify({ username: u, password: p })
       });
       if (res.ok) {
-        window.location.href = '/';
+        window.location.href = getRedirectTarget();
       } else {
         document.getElementById('error-msg').style.display = 'block';
       }

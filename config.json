@@ -56,5 +56,16 @@
       "events": []
     },
     "timeoutMs": 30000
+  },
+  "featuredImageGeneration": {
+    "provider": "qwen",
+    "enabled": true,
+    "endpoint": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
+    "apiKey": "sk-f8d601b45d034431ad7a0418148b5b06",
+    "model": "qwen-image",
+    "size": "1280*720",
+    "promptTemplate": "为以下文章生成头图：{{title}}。风格要求：简洁、有视觉冲击力、适合作为资讯文章封面。",
+    "negativePrompt": "",
+    "watermark": false
   }
 }

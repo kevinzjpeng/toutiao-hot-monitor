@@ -358,12 +358,16 @@ function normalizePublishBodyFromTemplate(runtimeOptions = {}) {
     });
   }
 
+  const publishOptionsPatch = ensurePublishOptionsEnabled(form, runtimeOptions);
+  changes.push(...publishOptionsPatch.changedKeys);
+
   return {
     rawBody: form.toString(),
     normalization: {
       mode: 'template',
       source: template.source,
-      changedKeys: changes
+      changedKeys: Array.from(new Set(changes)),
+      publishOptions: publishOptionsPatch
     }
   };
 }
@@ -404,13 +408,108 @@ function buildPublishFormBody(runtimeOptions = {}) {
   form.set('content', htmlContent);
   form.set('title', title);
   form.set('search_creation_info', JSON.stringify(runtimeOptions.searchCreationInfo || {}));
+  const publishOptionsPatch = ensurePublishOptionsEnabled(form, runtimeOptions);
 
   return {
     rawBody: form.toString(),
     normalization: {
       mode: 'basic',
-      source: 'generated'
+      source: 'generated',
+      publishOptions: publishOptionsPatch
     }
+  };
+}
+
+function ensurePublishOptionsEnabled(form, runtimeOptions = {}) {
+  if (!form || typeof form.get !== 'function' || typeof form.set !== 'function') {
+    return { enabled: false, changedKeys: [], skipped: 'invalid-form' };
+  }
+
+  if (runtimeOptions.enableAdvertisement === false && runtimeOptions.enableToutiaoFirstPublish === false) {
+    return { enabled: false, changedKeys: [], skipped: 'disabled-by-option' };
+  }
+
+  const changedKeys = [];
+  const setValue = (key, value) => {
+    const nextValue = String(value);
+    const prevValue = form.get(key);
+    if (prevValue !== nextValue) {
+      form.set(key, nextValue);
+      changedKeys.push(key);
+    }
+  };
+
+  if (runtimeOptions.enableAdvertisement !== false) {
+    setValue('ad_status', '1');
+    setValue('ad_enable', '1');
+    setValue('advertisement_enable', '1');
+    setValue('monetization_enable', '1');
+  }
+
+  if (runtimeOptions.enableToutiaoFirstPublish !== false) {
+    setValue('toutiao_first_publish', '1');
+    setValue('is_toutiao_first_publish', '1');
+    setValue('first_publish_toutiao', '1');
+    setValue('tt_first_publish', '1');
+  }
+
+  let draftFormData = {};
+  const rawDraftFormData = form.get('draft_form_data');
+  if (rawDraftFormData) {
+    try {
+      draftFormData = JSON.parse(rawDraftFormData);
+    } catch (error) {
+      draftFormData = {};
+    }
+  }
+
+  const draftAssignments = {};
+  if (runtimeOptions.enableAdvertisement !== false) {
+    Object.assign(draftAssignments, {
+      ad_status: 1,
+      adStatus: 1,
+      ad_enable: 1,
+      adEnable: 1,
+      advertisement_enable: 1,
+      advertisementEnable: 1,
+      monetization_enable: 1,
+      monetizationEnable: 1,
+      can_insert_ad: 1,
+      canInsertAd: 1,
+      is_open_ad: 1,
+      isOpenAd: 1
+    });
+  }
+
+  if (runtimeOptions.enableToutiaoFirstPublish !== false) {
+    Object.assign(draftAssignments, {
+      toutiao_first_publish: 1,
+      toutiaoFirstPublish: 1,
+      is_toutiao_first_publish: 1,
+      isToutiaoFirstPublish: 1,
+      first_publish_toutiao: 1,
+      firstPublishToutiao: 1,
+      tt_first_publish: 1,
+      ttFirstPublish: 1
+    });
+  }
+
+  let draftChanged = false;
+  Object.entries(draftAssignments).forEach(([key, value]) => {
+    if (draftFormData[key] !== value) {
+      draftFormData[key] = value;
+      draftChanged = true;
+    }
+  });
+
+  if (draftChanged || !rawDraftFormData) {
+    form.set('draft_form_data', JSON.stringify(draftFormData));
+    changedKeys.push('draft_form_data');
+  }
+
+  return {
+    enabled: true,
+    changedKeys: Array.from(new Set(changedKeys))
   };
 }
 

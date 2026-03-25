@@ -56,6 +56,27 @@ function writeJsonFile(filePath, content) {
   fs.writeFileSync(filePath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
 }
 
+function buildDefaultFeaturedImageSettings() {
+  return {
+    provider: 'qwen',
+    enabled: false,
+    endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+    apiKey: '',
+    model: 'qwen-image',
+    size: '1024*1024',
+    promptTemplate: '为以下文章生成头图：{{title}}。风格要求：简洁、有视觉冲击力、适合作为资讯文章封面。',
+    negativePrompt: '',
+    watermark: false
+  };
+}
+
+function getFeaturedImageSettings() {
+  return {
+    ...buildDefaultFeaturedImageSettings(),
+    ...(config.featuredImageGeneration || {})
+  };
+}
+
 function getCookieSettings() {
   const cookieMap = config.cookies || {};
   const rawCookie = buildRawCookie(cookieMap);
@@ -84,6 +105,36 @@ function saveCookieSettings(rawCookie) {
   config.mpRequest.rawCookie = nextConfig.mpRequest.rawCookie;
 
   return getCookieSettings();
+}
+
+function saveFeaturedImageSettings(payload = {}) {
+  const current = getFeaturedImageSettings();
+  const nextSettings = {
+    ...current,
+    provider: 'qwen',
+    enabled: payload.enabled === undefined ? current.enabled : Boolean(payload.enabled),
+    endpoint: String(payload.endpoint === undefined ? current.endpoint : payload.endpoint || '').trim(),
+    apiKey: String(payload.apiKey === undefined ? current.apiKey : payload.apiKey || '').trim(),
+    model: String(payload.model === undefined ? current.model : payload.model || '').trim(),
+    size: String(payload.size === undefined ? current.size : payload.size || '').trim(),
+    promptTemplate: String(payload.promptTemplate === undefined ? current.promptTemplate : payload.promptTemplate || '').trim(),
+    negativePrompt: String(payload.negativePrompt === undefined ? current.negativePrompt : payload.negativePrompt || '').trim(),
+    watermark: payload.watermark === undefined ? current.watermark : Boolean(payload.watermark)
+  };
+
+  if (!nextSettings.endpoint) {
+    throw new Error('Qwen 图片生成接口地址不能为空');
+  }
+  if (!nextSettings.model) {
+    throw new Error('Qwen 图片生成模型不能为空');
+  }
+
+  const nextConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  nextConfig.featuredImageGeneration = nextSettings;
+  writeJsonFile(CONFIG_PATH, nextConfig);
+
+  config.featuredImageGeneration = nextSettings;
+  return nextSettings;
 }
 
 function ensureAuthenticated(req, res) {
@@ -118,6 +169,14 @@ app.post('/api/login', (req, res) => {
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
+});
+
+app.get('/api/auth/status', (req, res) => {
+  res.json({
+    success: true,
+    authenticated: Boolean(req.session && req.session.user),
+    user: req.session && req.session.user ? { username: req.session.user } : null
+  });
 });
 
 app.get('/api/admin/cookies', (req, res) => {
@@ -159,9 +218,41 @@ app.post('/api/admin/cookies', async (req, res) => {
   }
 });
 
+app.get('/api/admin/featured-image-generation', (req, res) => {
+  try {
+    if (!ensureAuthenticated(req, res)) return;
+    res.json({
+      success: true,
+      data: {
+        updatedAt: formatLocalDateTime(),
+        settings: getFeaturedImageSettings()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/admin/featured-image-generation', (req, res) => {
+  try {
+    if (!ensureAuthenticated(req, res)) return;
+    const settings = saveFeaturedImageSettings(req.body || {});
+    res.json({
+      success: true,
+      data: {
+        updatedAt: formatLocalDateTime(),
+        settings
+      },
+      message: 'Qwen 头图生成配置已保存'
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
 // Authentication Middleware
 app.use((req, res, next) => {
-  if (req.path === '/login.html' || req.path === '/api/login') {
+  if (req.path === '/' || req.path === '/index.html' || req.path === '/login.html' || req.path === '/api/login' || req.path === '/api/auth/status') {
     return next();
   }
   if (!req.session || !req.session.user) {
@@ -173,7 +264,17 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // API: 获取最新热点榜单
 app.get('/api/hotspots', (req, res) => {
@@ -379,8 +480,144 @@ app.post('/api/user/articles/refresh', async (req, res) => {
   try {
     const { getUserArticles } = require('./user-articles');
     console.log('🔄 手动刷新用户文章...');
-    const articles = await getUserArticles();
+    const articles = await getUserArticles(false, true);
     res.json({ success: true, data: articles, count: articles.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// API: 待发布文章队列 - 列表
+app.get('/api/publish-queue', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const articles = storage.listPendingArticles({ limit, status });
+    res.json({ success: true, data: articles, count: articles.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// API: 待发布文章队列 - 详情
+app.get('/api/publish-queue/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '无效文章 ID' });
+    }
+
+    const article = storage.getPendingArticleById(id);
+    if (!article) {
+      return res.status(404).json({ success: false, message: '文章不存在' });
+    }
+
+    res.json({ success: true, data: article });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// API: 待发布文章队列 - 新建
+app.post('/api/publish-queue', (req, res) => {
+  try {
+    const article = storage.createPendingArticle(req.body || {});
+    res.status(201).json({ success: true, data: article });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// API: 待发布文章队列 - 更新
+app.put('/api/publish-queue/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '无效文章 ID' });
+    }
+
+    const article = storage.updatePendingArticle(id, req.body || {});
+    if (!article) {
+      return res.status(404).json({ success: false, message: '文章不存在' });
+    }
+
+    res.json({ success: true, data: article });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// API: 待发布文章队列 - 删除
+app.delete('/api/publish-queue/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '无效文章 ID' });
+    }
+
+    const deleted = storage.deletePendingArticle(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: '文章不存在' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// API: 从待发布队列直接触发 HTTP 发布
+app.post('/api/publish-queue/:id/publish/http', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '无效文章 ID' });
+    }
+
+    const article = storage.getPendingArticleById(id);
+    if (!article) {
+      return res.status(404).json({ success: false, message: '文章不存在' });
+    }
+
+    if (String(article.status || '').toLowerCase() === 'published') {
+      return res.status(409).json({
+        success: false,
+        queueId: id,
+        queueStatus: article.status,
+        message: '该文章已发布，禁止重复发布'
+      });
+    }
+
+    const { publishDraftViaHttp } = require('./mp-client');
+    const runtimeOptions = {
+      ...(req.body || {}),
+      title: article.title,
+      content: article.content,
+      coverImageUrl: article.coverUrl || (req.body && req.body.coverImageUrl) || '',
+      sourceUrl: article.sourceUrl || (req.body && req.body.sourceUrl) || ''
+    };
+
+    const result = await publishDraftViaHttp(runtimeOptions);
+    const nextStatus = result.ok ? 'published' : (article.status || 'pending');
+
+    storage.updatePendingArticle(id, {
+      status: nextStatus,
+      publishedAt: result.ok ? new Date().toISOString() : article.publishedAt,
+      publishResult: {
+        ok: result.ok,
+        status: result.status,
+        code: result.code,
+        message: result.message,
+        attempts: result.attempts || []
+      }
+    });
+
+    res.status(result.ok ? 200 : 502).json({
+      success: result.ok,
+      queueId: id,
+      queueStatus: nextStatus,
+      result
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -509,7 +746,7 @@ app.get('/', (req, res) => {
 
 // 定时任务：每 10 分钟抓取一次
 cron.schedule(config.scrapeInterval, async () => {
-  console.log(`⏰ [${formatLocalDateTime()}] 定时抓取开始`);
+  console.log(`⏰ [${new Date().toISOString()}] 定时抓取开始`);
   try {
     await scrapeHotSearches();
     

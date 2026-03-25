@@ -42,7 +42,163 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_snapshots_time ON snapshots(snapshot_time);
     CREATE INDEX IF NOT EXISTS idx_hotspot_items_snapshot ON hotspot_items(snapshot_id);
     CREATE INDEX IF NOT EXISTS idx_hotspot_items_topic ON hotspot_items(topic);
+
+    CREATE TABLE IF NOT EXISTS pending_articles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      cover_url TEXT,
+      source_url TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      published_at TEXT,
+      publish_result TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pending_articles_status ON pending_articles(status);
+    CREATE INDEX IF NOT EXISTS idx_pending_articles_created_at ON pending_articles(created_at DESC);
   `);
+}
+
+function normalizePendingArticleRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    coverUrl: row.cover_url || '',
+    sourceUrl: row.source_url || '',
+    notes: row.notes || '',
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publishedAt: row.published_at || null,
+    publishResult: row.publish_result ? safeParseJson(row.publish_result, null) : null
+  };
+}
+
+function safeParseJson(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function listPendingArticles({ limit = 100, status } = {}) {
+  const maxLimit = Number.isFinite(Number(limit)) ? Math.max(1, Math.min(Number(limit), 500)) : 100;
+  const hasStatus = typeof status === 'string' && status.trim();
+  const rows = hasStatus
+    ? db.prepare(`
+        SELECT id, title, content, cover_url, source_url, notes, status, created_at, updated_at, published_at, publish_result
+        FROM pending_articles
+        WHERE status = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT ?
+      `).all(status.trim(), maxLimit)
+    : db.prepare(`
+        SELECT id, title, content, cover_url, source_url, notes, status, created_at, updated_at, published_at, publish_result
+        FROM pending_articles
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT ?
+      `).all(maxLimit);
+
+  return rows.map(normalizePendingArticleRow);
+}
+
+function getPendingArticleById(id) {
+  const row = db.prepare(`
+    SELECT id, title, content, cover_url, source_url, notes, status, created_at, updated_at, published_at, publish_result
+    FROM pending_articles
+    WHERE id = ?
+  `).get(id);
+  return normalizePendingArticleRow(row);
+}
+
+function createPendingArticle(payload = {}) {
+  const title = String(payload.title || '').trim();
+  const content = String(payload.content || '').trim();
+
+  if (!title) {
+    throw new Error('标题不能为空');
+  }
+  if (!content) {
+    throw new Error('内容不能为空');
+  }
+
+  const now = formatLocalDateTime();
+  const result = db.prepare(`
+    INSERT INTO pending_articles(title, content, cover_url, source_url, notes, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    title,
+    content,
+    String(payload.coverUrl || '').trim(),
+    String(payload.sourceUrl || '').trim(),
+    String(payload.notes || '').trim(),
+    String(payload.status || 'pending').trim() || 'pending',
+    now,
+    now
+  );
+
+  return getPendingArticleById(result.lastInsertRowid);
+}
+
+function updatePendingArticle(id, payload = {}) {
+  const existing = getPendingArticleById(id);
+  if (!existing) return null;
+
+  const title = payload.title === undefined ? existing.title : String(payload.title || '').trim();
+  const content = payload.content === undefined ? existing.content : String(payload.content || '').trim();
+
+  if (!title) {
+    throw new Error('标题不能为空');
+  }
+  if (!content) {
+    throw new Error('内容不能为空');
+  }
+
+  const nextStatus = payload.status === undefined ? existing.status : String(payload.status || '').trim() || existing.status;
+  const publishResultJson = payload.publishResult === undefined
+    ? (existing.publishResult ? JSON.stringify(existing.publishResult) : null)
+    : (payload.publishResult == null ? null : JSON.stringify(payload.publishResult));
+  const publishedAt = payload.publishedAt === undefined ? existing.publishedAt : (payload.publishedAt || null);
+  const now = formatLocalDateTime();
+
+  db.prepare(`
+    UPDATE pending_articles
+    SET
+      title = ?,
+      content = ?,
+      cover_url = ?,
+      source_url = ?,
+      notes = ?,
+      status = ?,
+      updated_at = ?,
+      published_at = ?,
+      publish_result = ?
+    WHERE id = ?
+  `).run(
+    title,
+    content,
+    payload.coverUrl === undefined ? existing.coverUrl : String(payload.coverUrl || '').trim(),
+    payload.sourceUrl === undefined ? existing.sourceUrl : String(payload.sourceUrl || '').trim(),
+    payload.notes === undefined ? existing.notes : String(payload.notes || '').trim(),
+    nextStatus,
+    now,
+    publishedAt,
+    publishResultJson,
+    id
+  );
+
+  return getPendingArticleById(id);
+}
+
+function deletePendingArticle(id) {
+  const result = db.prepare('DELETE FROM pending_articles WHERE id = ?').run(id);
+  return result.changes > 0;
 }
 
 function getSnapshotByTime(snapshotTime) {
@@ -399,6 +555,11 @@ module.exports = {
   getFastestRising,
   getNewEntries,
   categorizeTopic,
+  listPendingArticles,
+  getPendingArticleById,
+  createPendingArticle,
+  updatePendingArticle,
+  deletePendingArticle,
   // 从 scraper 导出
   getCachedUserInfo: () => {
     const scraper = getScraperModule();

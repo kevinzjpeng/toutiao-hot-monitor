@@ -155,6 +155,50 @@ pkill -f "node src/server.js"
 - [x] 每 10 分钟自动刷新
 - [x] 保存 7 天历史数据
 
+## 🔌 MCP 接口
+
+项目已新增 MCP（Model Context Protocol）stdio 服务：`src/mcp-server.mjs`。
+
+### 启动方式
+
+```bash
+# 先启动 Web API
+npm start
+
+# 新终端启动 MCP
+npm run mcp
+```
+
+### 可选环境变量
+
+```bash
+TOUTIAO_API_BASE=http://127.0.0.1:3000
+TOUTIAO_MCP_COOKIE="session cookie"
+TOUTIAO_MCP_USERNAME="pengtianyu"
+TOUTIAO_MCP_PASSWORD="sunny808"
+```
+
+说明：
+1. 若配置 `TOUTIAO_MCP_COOKIE`，MCP 会直接携带 Cookie 调用 API。
+2. 若未配置 Cookie，但配置了用户名/密码，MCP 会先请求 `/api/login` 以建立会话。
+
+### 已暴露 MCP Tools
+
+1. `get_hotspots`
+2. `get_new_hotspots`
+3. `refresh_hotspots`
+4. `list_publish_queue`
+5. `create_pending_article`
+6. `update_pending_article`
+7. `publish_pending_article_http`
+8. `delete_pending_article`
+
+### 本地调试
+
+```bash
+npm run mcp:inspect
+```
+
 ## 🌐 访问 mp.toutiao.com（Cookie + Header）
 
 项目已新增接口：`POST /api/mp/collect/batch`。

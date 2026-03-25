@@ -289,6 +289,175 @@
       opacity: 0.7;
       cursor: not-allowed;
     }
+
+    .auth-shell {
+      margin: 0 auto 20px;
+      max-width: 720px;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 18px;
+      padding: 18px;
+      backdrop-filter: blur(12px);
+      color: white;
+    }
+
+    .auth-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .auth-row input {
+      flex: 1 1 180px;
+      min-width: 0;
+      border: 1px solid rgba(255,255,255,0.28);
+      background: rgba(8, 15, 35, 0.28);
+      color: white;
+      border-radius: 12px;
+      padding: 11px 12px;
+      outline: none;
+    }
+
+    .auth-row input::placeholder {
+      color: rgba(255,255,255,0.72);
+    }
+
+    .auth-message {
+      margin-top: 10px;
+      font-size: 0.92em;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .auth-message.error-text {
+      color: #ffe2e2;
+    }
+
+    .auth-userline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .auth-badge {
+      font-weight: 600;
+      color: white;
+    }
+
+    .queue-panel {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+
+    .queue-form {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .queue-form input,
+    .queue-form textarea,
+    .queue-form select {
+      width: 100%;
+      border: 1px solid #d8d8d8;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .queue-form textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+
+    .queue-form-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .queue-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+      color: white;
+      font-size: 14px;
+    }
+
+    .queue-btn.primary { background: #2563eb; }
+    .queue-btn.warn { background: #d97706; }
+    .queue-btn.success { background: #16a34a; }
+    .queue-btn.danger { background: #dc2626; }
+    .queue-btn.muted { background: #64748b; }
+
+    .queue-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      filter: grayscale(0.2);
+    }
+
+    .queue-item {
+      border: 1px solid #ececec;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+      background: #fafafa;
+    }
+
+    .queue-item h4 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: #1f2937;
+    }
+
+    .queue-meta {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .queue-preview {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .queue-item-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .queue-message {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #1f2937;
+    }
+
+    .queue-cover-wrap {
+      margin: 8px 0 10px;
+    }
+
+    .queue-cover-img {
+      display: block;
+      width: 100%;
+      max-width: 380px;
+      max-height: 220px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      background: #f3f4f6;
+    }
     
     @media (max-width: 768px) {
       header h1 { font-size: 1.8em; }
@@ -311,11 +480,31 @@
       <h1>🔥 头条热点监测</h1>
       <p>每 10 分钟自动更新 · 保留 7 天数据</p>
     </header>
+
+    <div class="auth-shell" id="authShell">
+      <div id="authLoggedOut" style="display:none;">
+        <div class="auth-row">
+          <input id="loginUsername" type="text" placeholder="用户名">
+          <input id="loginPassword" type="password" placeholder="密码">
+          <button class="refresh-btn" id="loginBtn" onclick="loginFromHome()">登录</button>
+        </div>
+        <div class="auth-message" id="authMessage">登录后可查看热点、管理待发布文章并进入后台配置。</div>
+      </div>
+      <div id="authLoggedIn" style="display:none;">
+        <div class="auth-userline">
+          <div class="auth-badge" id="authUserLabel">已登录</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="refresh-btn" href="/admin.html" style="text-decoration:none; display:inline-flex; align-items:center;">⚙️ Cookie 管理</a>
+            <button class="refresh-btn" id="logoutBtn" onclick="logoutFromHome()">退出登录</button>
+          </div>
+        </div>
+        <div class="auth-message" id="authLoggedInMessage">当前会话有效。</div>
+      </div>
+    </div>
     
     <div class="status-bar">
       <span id="lastUpdate">最后更新：加载中...</span>
       <div style="display: flex; gap: 10px; align-items: center;">
-        <a class="refresh-btn" href="/admin.html" style="text-decoration: none; display: inline-flex; align-items: center;">⚙️ Cookie 管理</a>
         <button class="refresh-btn" onclick="loadData()" id="refreshBtn">🔄 刷新</button>
       </div>
     </div>
@@ -335,6 +524,8 @@
       <button class="tab active" onclick="switchTab('new')" id="tab-new">🆕 新上榜</button>
       <button class="tab" onclick="switchTab('rising')" id="tab-rising">🚀 上升最快</button>
       <button class="tab" onclick="switchTab('hot')" id="tab-hot">🔥 最热榜单</button>
+      <button class="tab" onclick="switchTab('articles')" id="tab-articles">📝 我的文章</button>
+      <button class="tab" onclick="switchTab('queue')" id="tab-queue">🧾 待发布审稿</button>
     </div>
     
     <div class="category-filter" id="categoryFilter" style="display: none;">
@@ -354,8 +545,144 @@
     let currentTab = 'new';
     let currentCategory = 'all';
     let allCategories = [];
+    let currentQueueEditId = null;
+    let isAuthenticated = false;
+
+    function updateAuthUI(authenticated, username = '') {
+      isAuthenticated = authenticated;
+      document.getElementById('authLoggedOut').style.display = authenticated ? 'none' : 'block';
+      document.getElementById('authLoggedIn').style.display = authenticated ? 'block' : 'none';
+      document.querySelector('.status-bar').style.display = authenticated ? 'flex' : 'none';
+      document.querySelector('.tabs').style.display = authenticated ? 'flex' : 'none';
+      document.getElementById('sectionTitle').style.display = authenticated ? 'block' : 'none';
+      document.getElementById('categoryFilter').style.display = authenticated && currentTab === 'new' ? 'flex' : 'none';
+      document.getElementById('statsBar').style.display = authenticated && currentTab === 'new' ? 'flex' : 'none';
+      document.getElementById('refreshBtn').disabled = !authenticated;
+      document.getElementById('authUserLabel').textContent = username ? `已登录：${username}` : '已登录';
+
+      if (!authenticated) {
+        document.getElementById('hotspotList').innerHTML = '<div class="loading" style="color:#4b5563;">请先在首页登录后再查看数据。</div>';
+        document.getElementById('lastUpdate').textContent = '最后更新：等待登录';
+      }
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      if (response.status === 401) {
+        throw new Error('UNAUTHORIZED');
+      }
+
+      if (response.status === 404) {
+        throw new Error('NOT_FOUND');
+      }
+
+      const text = await response.text();
+      let result = {};
+      try {
+        result = text ? JSON.parse(text) : {};
+      } catch (error) {
+        throw new Error(`接口返回了非 JSON 内容: ${url}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || `请求失败 (${response.status})`);
+      }
+
+      return result;
+    }
+
+    async function checkAuthStatusLegacyFallback() {
+      try {
+        const response = await fetch('/api/new?limit=1');
+        if (response.status === 401) {
+          updateAuthUI(false);
+          return false;
+        }
+
+        if (response.ok) {
+          updateAuthUI(true);
+          document.getElementById('authLoggedInMessage').textContent = '兼容模式：后端缺少 /api/auth/status，已通过旧接口确认会话有效。建议重启服务加载最新后端。';
+          return true;
+        }
+      } catch (error) {
+        // Continue to unauthenticated state.
+      }
+
+      updateAuthUI(false);
+      return false;
+    }
+
+    async function checkAuthStatus() {
+      try {
+        const result = await fetchJson('/api/auth/status');
+        updateAuthUI(Boolean(result.authenticated), result.user && result.user.username ? result.user.username : '');
+        return Boolean(result.authenticated);
+      } catch (error) {
+        if (error.message === 'NOT_FOUND') {
+          return checkAuthStatusLegacyFallback();
+        }
+        updateAuthUI(false);
+        return false;
+      }
+    }
+
+    async function loginFromHome() {
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      const button = document.getElementById('loginBtn');
+      const message = document.getElementById('authMessage');
+
+      button.disabled = true;
+      button.textContent = '登录中...';
+      message.classList.remove('error-text');
+
+      try {
+        const result = await fetchJson('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (!result.success) {
+          throw new Error(result.message || '登录失败');
+        }
+
+        message.textContent = '登录成功，正在加载数据...';
+        const authed = await checkAuthStatus();
+        if (authed) {
+          switchTab('new');
+          loadUserInfo();
+        }
+      } catch (error) {
+        message.textContent = error.message === 'UNAUTHORIZED' ? '用户名或密码错误。' : `登录失败：${error.message}`;
+        message.classList.add('error-text');
+      } finally {
+        button.disabled = false;
+        button.textContent = '登录';
+      }
+    }
+
+    async function logoutFromHome() {
+      const button = document.getElementById('logoutBtn');
+      button.disabled = true;
+      button.textContent = '退出中...';
+
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } finally {
+        updateAuthUI(false);
+        document.getElementById('authMessage').textContent = '已退出登录。';
+        document.getElementById('authMessage').classList.remove('error-text');
+        button.disabled = false;
+        button.textContent = '退出登录';
+      }
+    }
     
     async function switchTab(tab) {
+      if (!isAuthenticated) {
+        return;
+      }
+
       currentTab = tab;
       currentCategory = 'all';
       
@@ -367,12 +694,15 @@
       const titles = {
         'new': '🆕 新上榜热点',
         'rising': '🚀 上升最快（10 分钟内）',
-        'hot': '🔥 当前最热'
+        'hot': '🔥 当前最热',
+        'articles': '📝 我的文章（含相关文章/评论/发布时间）',
+        'queue': '🧾 待发布文章审稿区'
       };
       document.getElementById('sectionTitle').textContent = titles[tab];
       
       // 分类筛选器只在"新上榜"标签显示
       document.getElementById('categoryFilter').style.display = (tab === 'new') ? 'flex' : 'none';
+      document.getElementById('statsBar').style.display = (tab === 'new') ? 'flex' : 'none';
       
       // 加载数据
       loadData();
@@ -420,6 +750,10 @@
     }
     
     async function loadData() {
+      if (!isAuthenticated) {
+        return;
+      }
+
       const refreshBtn = document.getElementById('refreshBtn');
       const hotspotList = document.getElementById('hotspotList');
       const errorBox = document.getElementById('errorBox');
@@ -429,6 +763,15 @@
       errorBox.style.display = 'none';
       
       try {
+        if (currentTab === 'queue') {
+          await loadPublishQueue();
+          return;
+        }
+        if (currentTab === 'articles') {
+          await showArticles();
+          return;
+        }
+
         let url;
         if (currentTab === 'new') {
           url = '/api/new';
@@ -441,8 +784,7 @@
           url = '/api/hotspots';
         }
         
-        const response = await fetch(url);
-        const result = await response.json();
+        const result = await fetchJson(url);
         
         if (result.success && result.data.length > 0) {
           renderList(result.data, result.snapshotTime || null);
@@ -455,11 +797,273 @@
           hotspotList.innerHTML = '<div class="loading">暂无数据，等待首次抓取...</div>';
         }
       } catch (error) {
+        if (error.message === 'UNAUTHORIZED') {
+          updateAuthUI(false);
+          document.getElementById('authMessage').textContent = '会话已失效，请重新登录。';
+          document.getElementById('authMessage').classList.add('error-text');
+          return;
+        }
         errorBox.textContent = '加载失败：' + error.message;
         errorBox.style.display = 'block';
       } finally {
         refreshBtn.disabled = false;
         refreshBtn.textContent = '🔄 刷新';
+      }
+    }
+
+    async function loadPublishQueue() {
+      const hotspotList = document.getElementById('hotspotList');
+      const result = await fetchJson('/api/publish-queue?limit=100');
+
+      if (!result.success) {
+        throw new Error(result.message || '加载待发布队列失败');
+      }
+
+      renderQueuePanel(result.data || []);
+      document.getElementById('lastUpdate').textContent = '最后更新：' + new Date().toLocaleString('zh-CN');
+    }
+
+    function renderQueuePanel(articles) {
+      const hotspotList = document.getElementById('hotspotList');
+      const itemsHtml = articles.length
+        ? articles.map(renderQueueItem).join('')
+        : '<div class="loading" style="color:#374151;padding:20px;">暂无待发布文章，先在上方创建一篇。</div>';
+
+      hotspotList.innerHTML = `
+        <div class="queue-panel">
+          <form class="queue-form" id="queueForm" onsubmit="saveQueueArticle(event)">
+            <input id="queueTitle" type="text" placeholder="文章标题" required />
+            <textarea id="queueContent" placeholder="文章内容（纯文本，系统会自动转段落）" required></textarea>
+            <input id="queueCoverUrl" type="url" placeholder="封面图 URL（可选）" />
+            <input id="queueSourceUrl" type="url" placeholder="来源链接 URL（可选）" />
+            <textarea id="queueNotes" placeholder="审稿备注（可选）"></textarea>
+            <select id="queueStatus">
+              <option value="pending">pending - 待审核</option>
+              <option value="reviewed">reviewed - 已审核</option>
+              <option value="hold">hold - 暂缓发布</option>
+            </select>
+            <div class="queue-form-actions">
+              <button class="queue-btn primary" type="submit">💾 保存到待发布</button>
+              <button class="queue-btn muted" type="button" onclick="resetQueueForm()">♻️ 清空表单</button>
+            </div>
+            <div class="queue-message" id="queueFormMessage"></div>
+          </form>
+          <div id="queueItems">${itemsHtml}</div>
+        </div>
+      `;
+    }
+
+    function normalizeAbsoluteUrl(url) {
+      const value = String(url || '').trim();
+      if (!value) return '';
+      if (value.startsWith('//')) return `https:${value}`;
+      return value;
+    }
+
+    function parseMaybeJson(text) {
+      const raw = String(text || '').trim();
+      if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) {
+        return null;
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function resolveQueueCoverUrl(item) {
+      const picks = [];
+      const push = (v) => {
+        if (!v) return;
+        if (typeof v === 'string') {
+          const parsed = parseMaybeJson(v);
+          if (parsed) {
+            push(parsed);
+            return;
+          }
+          picks.push(v);
+          return;
+        }
+        if (Array.isArray(v)) {
+          v.forEach(push);
+          return;
+        }
+        if (typeof v === 'object') {
+          push(v.url);
+          push(v.imageUrl);
+          push(v.src);
+          return;
+        }
+      };
+
+      push(item && item.coverUrl);
+      push(item && item.cover_url);
+      push(item && item.coverImageUrl);
+      push(item && item.featuredImageUrl);
+      push(item && item.featuredImage);
+      push(item && item.cover);
+      push(item && item.images);
+
+      for (const p of picks) {
+        const normalized = normalizeAbsoluteUrl(p);
+        if (!normalized) continue;
+        if (/^https?:\/\//i.test(normalized) || normalized.startsWith('/')) {
+          return normalized;
+        }
+      }
+      return '';
+    }
+
+    function renderQueueItem(item) {
+      const preview = String(item.content || '').slice(0, 180);
+      const isPublished = String(item.status || '').toLowerCase() === 'published';
+      const coverUrl = resolveQueueCoverUrl(item);
+      const coverLink = coverUrl
+        ? `<a href="${escapeHtml(coverUrl)}" target="_blank" rel="noopener noreferrer">封面图</a>`
+        : '无封面';
+      const sourceLink = item.sourceUrl
+        ? `<a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">来源链接</a>`
+        : '无来源';
+      const publishInfo = item.publishResult
+        ? `最近发布：${escapeHtml(item.publishResult.message || '')} (code ${escapeHtml(String(item.publishResult.code ?? ''))})`
+        : '';
+      const publishButtonLabel = isPublished ? '✅ 已发布' : '🚀 发布';
+      const publishButtonDisabled = isPublished ? 'disabled' : '';
+      const coverPreview = coverUrl
+        ? `<div class="queue-cover-wrap"><img class="queue-cover-img" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(item.title || '封面图')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" /></div>`
+        : '';
+
+      return `
+        <div class="queue-item">
+          <h4>${escapeHtml(item.title)}</h4>
+          <div class="queue-meta">
+            #${item.id} | 状态：${escapeHtml(item.status)} | 创建：${formatPublishedAt(item.createdAt)} | 更新：${formatPublishedAt(item.updatedAt)}<br>
+            ${coverLink} | ${sourceLink}
+          </div>
+          ${coverPreview}
+          <div class="queue-preview">${escapeHtml(preview)}${item.content && item.content.length > 180 ? '...' : ''}</div>
+          ${item.notes ? `<div class="queue-meta">备注：${escapeHtml(item.notes)}</div>` : ''}
+          ${publishInfo ? `<div class="queue-meta">${publishInfo}</div>` : ''}
+          <div class="queue-item-actions">
+            <button class="queue-btn warn" onclick="editQueueArticle(${item.id})">✏️ 编辑</button>
+            <button class="queue-btn success" onclick="publishQueueArticle(${item.id})" ${publishButtonDisabled}>${publishButtonLabel}</button>
+            <button class="queue-btn danger" onclick="deleteQueueArticle(${item.id})">🗑️ 删除</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function saveQueueArticle(event) {
+      event.preventDefault();
+      const messageEl = document.getElementById('queueFormMessage');
+      messageEl.textContent = '';
+
+      const payload = {
+        title: document.getElementById('queueTitle').value.trim(),
+        content: document.getElementById('queueContent').value.trim(),
+        coverUrl: document.getElementById('queueCoverUrl').value.trim(),
+        sourceUrl: document.getElementById('queueSourceUrl').value.trim(),
+        notes: document.getElementById('queueNotes').value.trim(),
+        status: document.getElementById('queueStatus').value
+      };
+
+      if (!payload.title || !payload.content) {
+        messageEl.textContent = '标题和内容不能为空';
+        return;
+      }
+
+      const isEdit = Number.isFinite(Number(currentQueueEditId));
+      const url = isEdit ? `/api/publish-queue/${currentQueueEditId}` : '/api/publish-queue';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || '保存失败');
+      }
+
+      messageEl.textContent = isEdit ? '编辑已保存' : '已加入待发布队列';
+      resetQueueForm();
+      await loadPublishQueue();
+    }
+
+    async function editQueueArticle(id) {
+      const result = await fetchJson(`/api/publish-queue/${id}`);
+      if (!result.success) {
+        throw new Error(result.message || '读取文章失败');
+      }
+
+      const item = result.data;
+      currentQueueEditId = item.id;
+      document.getElementById('queueTitle').value = item.title || '';
+      document.getElementById('queueContent').value = item.content || '';
+      document.getElementById('queueCoverUrl').value = item.coverUrl || '';
+      document.getElementById('queueSourceUrl').value = item.sourceUrl || '';
+      document.getElementById('queueNotes').value = item.notes || '';
+      document.getElementById('queueStatus').value = item.status || 'pending';
+      document.getElementById('queueFormMessage').textContent = `正在编辑 #${item.id}`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function deleteQueueArticle(id) {
+      if (!confirm('确认删除这篇待发布文章吗？')) {
+        return;
+      }
+
+      const response = await fetch(`/api/publish-queue/${id}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || '删除失败');
+      }
+
+      if (Number(currentQueueEditId) === Number(id)) {
+        resetQueueForm();
+      }
+      await loadPublishQueue();
+    }
+
+    async function publishQueueArticle(id) {
+      const messageEl = document.getElementById('queueFormMessage');
+      const currentItemResult = await fetchJson(`/api/publish-queue/${id}`);
+      if (currentItemResult.success && currentItemResult.data && String(currentItemResult.data.status || '').toLowerCase() === 'published') {
+        messageEl.textContent = '该文章已发布，已禁止重复发布';
+        await loadPublishQueue();
+        return;
+      }
+
+      messageEl.textContent = '正在触发发布...';
+      const response = await fetch(`/api/publish-queue/${id}/publish/http`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const result = await response.json();
+      if (!result.success) {
+        messageEl.textContent = `发布失败：${result.message || (result.result && result.result.message) || 'unknown'}`;
+      } else {
+        messageEl.textContent = '发布成功';
+      }
+      await loadPublishQueue();
+    }
+
+    function resetQueueForm() {
+      currentQueueEditId = null;
+      const form = document.getElementById('queueForm');
+      if (form) {
+        form.reset();
+      }
+      const status = document.getElementById('queueStatus');
+      if (status) {
+        status.value = 'pending';
+      }
+      const messageEl = document.getElementById('queueFormMessage');
+      if (messageEl) {
+        messageEl.textContent = '';
       }
     }
     
@@ -552,9 +1156,16 @@
       return div.innerHTML;
     }
     
-    // 页面加载时获取数据
-    switchTab('new');
-    loadUserInfo();
+    async function initHomePage() {
+      const authed = await checkAuthStatus();
+      if (authed) {
+        switchTab('new');
+        loadUserInfo();
+      }
+    }
+
+    // 页面加载时初始化认证态
+    initHomePage();
     
     // 每 10 分钟自动刷新
     setInterval(loadData, 600000);
@@ -567,16 +1178,32 @@
       hotspotList.innerHTML = '<div class="loading">正在加载文章列表...</div>';
       
       try {
-        const response = await fetch('/api/user/articles');
-        const result = await response.json();
+        const result = await fetchJson('/api/user/articles');
         
         if (result.success && result.data.length > 0) {
           let html = '';
           result.data.forEach((article, index) => {
+            const publishAt = article.publishTime || article.publishTimeText || article.createTime || '';
+            const publishText = publishAt ? formatPublishedAt(publishAt) : '未知';
+            const commentText = Number.isFinite(Number(article.commentCount)) ? Number(article.commentCount) : 0;
+            const related = Array.isArray(article.relatedArticles) ? article.relatedArticles : [];
+            const mainLink = article.url ? `<a class="topic-link" href="${escapeHtml(article.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(article.title)}</a>` : escapeHtml(article.title);
+            const relatedHtml = related.length
+              ? `<div class="topic-time" style="margin-top:8px;">相关文章：${related.map((item) => {
+                  const rTitle = escapeHtml(item.title || '未命名');
+                  const rUrl = escapeHtml(item.url || '');
+                  return rUrl ? `<a class="topic-link" href="${rUrl}" target="_blank" rel="noopener noreferrer">${rTitle}</a>` : rTitle;
+                }).join(' · ')}</div>`
+              : '<div class="topic-time" style="margin-top:8px;">相关文章：无</div>';
+
             html += `
               <div class="hotspot-item">
                 <div class="rank rank-other">${index + 1}</div>
-                <div class="topic">${escapeHtml(article.title)}</div>
+                <div class="topic-wrap">
+                  <div class="topic">${mainLink}</div>
+                  <div class="topic-time">发布时间：${publishText} | 评论：${commentText}</div>
+                  ${relatedHtml}
+                </div>
               </div>
             `;
           });

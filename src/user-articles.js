@@ -37,14 +37,17 @@ async function fetchUserArticles(userId, cookies = {}) {
     
     console.log(`✅ 获取到 ${data.data.length} 篇文章`);
     
-    return data.data.map(article => ({
-      title: article.title,
-      url: article.article_url,
-      createTime: article.create_time,
-      readCount: article.read_count,
-      commentCount: article.comment_count,
-      diggCount: article.digg_count
-    }));
+    const articles = [];
+
+    for (const article of data.data) {
+      const normalized = normalizeArticleFromPublicApi(article);
+      if ((!normalized.relatedArticles || normalized.relatedArticles.length === 0) && normalized.url) {
+        normalized.relatedArticles = await fetchRelatedArticlesFromArticleUrl(normalized.url, cookieString);
+      }
+      articles.push(normalized);
+    }
+
+    return articles;
     
   } catch (error) {
     console.error('❌ 获取文章失败:', error.message);
@@ -102,29 +105,113 @@ async function fetchUserArticlesViaBackend() {
       return [];
     }
     
-    // 4. 解析文章列表
-    const refs = snapshot.data.refs;
-    const articles = [];
-    
-    Object.values(refs).forEach(v => {
-      if (v.name && 
-          v.name.length > 10 && 
-          v.name.length < 100 && 
-          !v.name.includes('http') && 
-          !v.name.includes('请输入') && 
-          !v.name.includes('登录') && 
-          !v.name.includes('协议') && 
-          !v.name.includes('关于') &&
-          !v.name.includes('验证码') &&
-          !v.name.includes('遇到问题') &&
-          !v.name.includes('隐私')) {
-        articles.push({
-          title: v.name.trim()
-        });
+    // 4. 优先通过 DOM 提取结构化数据
+    let articles = [];
+    try {
+      const articleEvalOutput = execSync(`agent-browser eval "(() => {
+        const toAbs = (href) => {
+          if (!href) return '';
+          try { return new URL(href, location.origin).toString(); } catch (e) { return href; }
+        };
+
+        const unique = new Map();
+        const links = Array.from(document.querySelectorAll('a[href]'));
+
+        const isArticleLink = (href) => {
+          return /toutiao\\.com\\/(article|w\\/article)\\//.test(href || '');
+        };
+
+        const parsePublishTime = (text) => {
+          const m = String(text || '').match(/(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}(?:\\s+\\d{1,2}:\\d{1,2})?)/);
+          return m ? m[1].replace(/\\./g, '-') : '';
+        };
+
+        const parseCommentCount = (text) => {
+          const m = String(text || '').match(/评论\\s*(\\d+)/);
+          return m ? Number(m[1]) : null;
+        };
+
+        for (const link of links) {
+          const title = (link.textContent || '').trim().replace(/\\s+/g, ' ');
+          const href = toAbs(link.getAttribute('href') || '');
+          if (!title || title.length < 6 || !isArticleLink(href)) continue;
+
+          const row = link.closest('tr, li, article, .item, .card, .list-item, [class*=item], [class*=card]') || link.parentElement;
+          const rowText = row ? (row.textContent || '').replace(/\\s+/g, ' ') : '';
+          const allRowLinks = row ? Array.from(row.querySelectorAll('a[href]')) : [];
+          const relatedArticles = allRowLinks
+            .map((a) => ({
+              title: (a.textContent || '').trim().replace(/\\s+/g, ' '),
+              url: toAbs(a.getAttribute('href') || '')
+            }))
+            .filter((x) => x.title && x.title !== title && isArticleLink(x.url))
+            .slice(0, 5);
+
+          if (!unique.has(title)) {
+            unique.set(title, {
+              title,
+              url: href,
+              publishTime: parsePublishTime(rowText),
+              publishTimeText: parsePublishTime(rowText),
+              commentCount: parseCommentCount(rowText),
+              relatedArticles,
+              source: 'backend-dom'
+            });
+          }
+        }
+
+        return JSON.stringify(Array.from(unique.values()).slice(0, 30));
+      })()"`, {
+        encoding: 'utf8',
+        timeout: 30000
+      }).trim();
+
+      const parsed = JSON.parse(articleEvalOutput);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        articles = parsed;
       }
-    });
+    } catch (e) {
+      // Ignore and continue to snapshot fallback.
+    }
+
+    // 5. 回退：解析 snapshot refs
+    if (!articles.length) {
+      const refs = snapshot.data.refs;
+      articles = [];
+      Object.values(refs).forEach(v => {
+        if (v.name &&
+            v.name.length > 10 &&
+            v.name.length < 100 &&
+            !v.name.includes('http') &&
+            !v.name.includes('请输入') &&
+            !v.name.includes('登录') &&
+            !v.name.includes('协议') &&
+            !v.name.includes('关于') &&
+            !v.name.includes('验证码') &&
+            !v.name.includes('遇到问题') &&
+            !v.name.includes('隐私')) {
+          articles.push({
+            title: v.name.trim(),
+            url: '',
+            publishTime: '',
+            publishTimeText: '',
+            commentCount: null,
+            relatedArticles: [],
+            source: 'backend-snapshot'
+          });
+        }
+      });
+    }
+
+    // 6. 如果后端提取没有相关文章，尝试从文章详情页补齐（限前 10 篇）
+    const top = articles.slice(0, 10);
+    for (const article of top) {
+      if ((!article.relatedArticles || article.relatedArticles.length === 0) && article.url) {
+        article.relatedArticles = await fetchRelatedArticlesFromArticleUrl(article.url, buildCookieString(cookies));
+      }
+    }
     
-    // 5. 关闭浏览器
+    // 7. 关闭浏览器
     try {
       execSync('agent-browser close', { stdio: 'pipe', timeout: 5000 });
     } catch (e) {}
@@ -157,14 +244,24 @@ async function getUserArticles(forceBackend = false) {
   const userId = '7163703009400886';
   const cookies = config.cookies || {};
   
+  const forceRefresh = Boolean(arguments[1]);
+
   // 方法 0: 优先读取已缓存的文章数据
   const cachedPath = path.join(__dirname, '../data/user-articles.json');
-  if (fs.existsSync(cachedPath)) {
+  if (!forceRefresh && fs.existsSync(cachedPath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(cachedPath, 'utf8'));
       if (cached.articles && cached.articles.length > 0) {
-        console.log(`📁 读取缓存文章：${cached.articles.length} 篇`);
-        return cached.articles;
+        const hasEnrichedFields = cached.articles.some(a =>
+          Object.prototype.hasOwnProperty.call(a, 'publishTime') ||
+          Object.prototype.hasOwnProperty.call(a, 'commentCount') ||
+          Object.prototype.hasOwnProperty.call(a, 'relatedArticles')
+        );
+
+        if (hasEnrichedFields) {
+          console.log(`📁 读取缓存文章：${cached.articles.length} 篇`);
+          return cached.articles;
+        }
       }
     } catch (e) {
       // 忽略缓存读取失败
@@ -200,6 +297,104 @@ async function getUserArticles(forceBackend = false) {
   }
   
   return articles;
+}
+
+function buildCookieString(cookies = {}) {
+  return Object.entries(cookies)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
+
+function toIsoTime(value) {
+  const ts = Number(value);
+  if (!Number.isFinite(ts) || ts <= 0) return '';
+  const ms = ts > 1e12 ? ts : ts * 1000;
+  return new Date(ms).toISOString();
+}
+
+function normalizeRelatedFromApi(article = {}) {
+  const list = [];
+  const push = (title, url) => {
+    const t = String(title || '').trim();
+    const u = String(url || '').trim();
+    if (!t) return;
+    list.push({ title: t, url: u });
+  };
+
+  if (Array.isArray(article.related_news)) {
+    article.related_news.forEach((item) => {
+      push(item && (item.title || item.name), item && (item.url || item.article_url || item.display_url));
+    });
+  }
+  if (Array.isArray(article.related_words)) {
+    article.related_words.forEach((item) => {
+      push(item && (item.word || item.title || item.keyword), item && (item.url || item.link));
+    });
+  }
+
+  const unique = new Map();
+  list.forEach((x) => {
+    if (!unique.has(x.title)) {
+      unique.set(x.title, x);
+    }
+  });
+  return Array.from(unique.values()).slice(0, 8);
+}
+
+function normalizeArticleFromPublicApi(article = {}) {
+  const publishTime = toIsoTime(article.publish_time || article.create_time);
+  return {
+    title: article.title || '',
+    url: article.article_url || article.url || '',
+    publishTime,
+    publishTimeText: publishTime || '',
+    createTime: article.create_time || null,
+    readCount: Number(article.read_count || 0),
+    commentCount: Number(article.comment_count || 0),
+    diggCount: Number(article.digg_count || 0),
+    relatedArticles: normalizeRelatedFromApi(article),
+    source: 'public-api'
+  };
+}
+
+async function fetchRelatedArticlesFromArticleUrl(articleUrl, cookieString = '') {
+  try {
+    const response = await fetch(articleUrl, {
+      headers: {
+        'user-agent': 'Mozilla/5.0',
+        cookie: cookieString
+      }
+    });
+
+    if (!response.ok) return [];
+    const html = await response.text();
+
+    const matches = [];
+    const re = /\"related_news\"\s*:\s*(\[[\s\S]*?\])/g;
+    const matched = html.match(re);
+    if (matched && matched.length) {
+      const raw = matched[0].replace(/^\"related_news\"\s*:\s*/, '');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((item) => {
+          matches.push({
+            title: String((item && (item.title || item.name)) || '').trim(),
+            url: String((item && (item.url || item.article_url || item.display_url)) || '').trim()
+          });
+        });
+      }
+    }
+
+    const uniq = new Map();
+    matches.forEach((x) => {
+      if (x.title && !uniq.has(x.title)) {
+        uniq.set(x.title, x);
+      }
+    });
+    return Array.from(uniq.values()).slice(0, 8);
+  } catch (error) {
+    return [];
+  }
 }
 
 function sleep(ms) {

@@ -3,233 +3,134 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cookie 管理</title>
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
-      background: linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #334155 100%);
-      color: #e2e8f0;
-      min-height: 100vh;
-      padding: 32px 20px;
-    }
-
-    .page {
-      max-width: 980px;
-      margin: 0 auto;
-    }
-
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .toolbar a {
-      color: #93c5fd;
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .panel {
-      background: rgba(15, 23, 42, 0.72);
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      border-radius: 18px;
-      padding: 24px;
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
-      backdrop-filter: blur(12px);
-    }
-
-    h1 {
-      margin: 0 0 10px;
-      font-size: 2rem;
-    }
-
-    p {
-      margin: 0 0 16px;
-      color: #cbd5e1;
-      line-height: 1.6;
-    }
-
-    .status {
-      display: none;
-      margin-bottom: 16px;
-      padding: 12px 14px;
-      border-radius: 12px;
-      font-size: 0.95rem;
-    }
-
-    .status.success {
-      display: block;
-      background: rgba(34, 197, 94, 0.14);
-      color: #bbf7d0;
-      border: 1px solid rgba(34, 197, 94, 0.28);
-    }
-
-    .status.error {
-      display: block;
-      background: rgba(248, 113, 113, 0.14);
-      color: #fecaca;
-      border: 1px solid rgba(248, 113, 113, 0.28);
-    }
-
-    .meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .meta-card {
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(30, 41, 59, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.14);
-    }
-
-    .meta-card strong {
-      display: block;
-      margin-bottom: 8px;
-      color: #f8fafc;
-    }
-
-    .user-summary {
-      margin-top: 16px;
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(30, 41, 59, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.14);
-      color: #cbd5e1;
-      line-height: 1.6;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 600;
-      color: #f8fafc;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 220px;
-      border-radius: 14px;
-      border: 1px solid rgba(148, 163, 184, 0.26);
-      background: rgba(15, 23, 42, 0.8);
-      color: #e2e8f0;
-      padding: 14px;
-      resize: vertical;
-      font: 14px/1.6 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    }
-
-    .hint {
-      margin-top: 10px;
-      font-size: 0.92rem;
-      color: #94a3b8;
-    }
-
-    .actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 18px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: none;
-      border-radius: 999px;
-      padding: 12px 20px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform 0.15s ease, opacity 0.15s ease;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .primary {
-      background: linear-gradient(135deg, #38bdf8, #2563eb);
-      color: white;
-    }
-
-    .secondary {
-      background: rgba(148, 163, 184, 0.16);
-      color: #e2e8f0;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    pre {
-      margin: 18px 0 0;
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(15, 23, 42, 0.88);
-      border: 1px solid rgba(148, 163, 184, 0.14);
-      color: #bfdbfe;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      min-height: 80px;
-    }
-
-    @media (max-width: 640px) {
-      body { padding: 20px 14px; }
-      .panel { padding: 18px; }
-    }
-  </style>
+  <title>后台配置管理</title>
+  <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
   <div class="page">
     <div class="toolbar">
       <a href="/">← 返回首页</a>
-      <span id="updatedAt">最近保存：未加载</span>
+      <span class="toolbar-meta" id="updatedAt">最近保存：未加载</span>
     </div>
 
-    <div class="panel">
-      <h1>头条 Cookie 管理</h1>
-      <p>将浏览器中复制的完整 Cookie 字符串粘贴到下面。保存后会同步更新 config.json 和 cookies.json，后续抓取与用户信息获取会直接使用这份配置。</p>
+    <div class="layout">
+      <div class="panel">
+        <h1>头条 Cookie 管理</h1>
+        <p>将浏览器中复制的完整 Cookie 字符串粘贴到下面。保存后会同步更新 config.json 和 cookies.json，后续抓取与用户信息获取会直接使用这份配置。</p>
 
-      <div id="status" class="status"></div>
+        <div id="status" class="status"></div>
 
-      <div class="meta">
-        <div class="meta-card">
-          <strong>已识别 Cookie 数量</strong>
-          <span id="cookieCount">0</span>
+        <div class="meta">
+          <div class="meta-card">
+            <strong>已识别 Cookie 数量</strong>
+            <span id="cookieCount">0</span>
+          </div>
+          <div class="meta-card">
+            <strong>关键字段</strong>
+            <span id="cookieKeys">未加载</span>
+          </div>
         </div>
-        <div class="meta-card">
-          <strong>关键字段</strong>
-          <span id="cookieKeys">未加载</span>
+
+        <label for="rawCookie">Raw Cookie</label>
+        <textarea class="large" id="rawCookie" placeholder="例如：sessionid=...; sid_tt=...; ttwid=...;"></textarea>
+        <div class="hint">建议至少包含 sessionid、sid_tt、ttwid、toutiao_sso_user 等关键字段。</div>
+
+        <div class="actions">
+          <button class="primary" id="saveBtn" onclick="saveCookie()">保存 Cookie</button>
+          <button class="secondary" onclick="loadCookie()">重新加载</button>
         </div>
+
+        <div id="userSummary" class="user-summary">用户信息待刷新</div>
+
+        <pre id="preview" class="preview">Cookie 预览加载中...</pre>
       </div>
 
-      <label for="rawCookie">Raw Cookie</label>
-      <textarea id="rawCookie" placeholder="例如：sessionid=...; sid_tt=...; ttwid=...;"></textarea>
-      <div class="hint">建议至少包含 sessionid、sid_tt、ttwid、toutiao_sso_user 等关键字段。</div>
+      <div class="panel">
+        <h1>Qwen 头图生成配置</h1>
+        <p>这里配置文章封面图的 Qwen 图片生成接口。保存后会写入 config.json，供后续生成头图时直接调用。</p>
 
-      <div class="actions">
-        <button class="primary" id="saveBtn" onclick="saveCookie()">保存 Cookie</button>
-        <button class="secondary" onclick="loadCookie()">重新加载</button>
+        <div id="imageStatus" class="status"></div>
+
+        <div class="form-grid">
+          <div class="field-group">
+            <label for="imageEndpoint">接口地址</label>
+            <input id="imageEndpoint" type="url" placeholder="https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis">
+          </div>
+          <div class="field-group">
+            <label for="imageModel">模型</label>
+            <input id="imageModel" type="text" placeholder="qwen-image">
+          </div>
+          <div class="field-group">
+            <label for="imageSize">尺寸</label>
+            <input id="imageSize" type="text" placeholder="1024*1024">
+          </div>
+          <div class="field-group">
+            <label for="imageApiKey">API Key</label>
+            <input id="imageApiKey" type="password" placeholder="sk-...">
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input id="imageEnabled" type="checkbox">
+          <label for="imageEnabled">启用 Qwen 头图生成</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input id="imageWatermark" type="checkbox">
+          <label for="imageWatermark">请求图片水印</label>
+        </div>
+
+        <div class="field-group" style="margin-top:16px;">
+          <label for="imagePromptTemplate">Prompt 模板</label>
+          <textarea class="medium" id="imagePromptTemplate" placeholder="为以下文章生成头图：{{title}} ..."></textarea>
+        </div>
+
+        <div class="field-group" style="margin-top:16px;">
+          <label for="imageNegativePrompt">反向 Prompt</label>
+          <textarea class="medium" id="imageNegativePrompt" placeholder="不需要的人物、文字、水印等限制条件"></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="saveImageBtn" onclick="saveImageSettings()">保存头图配置</button>
+          <button class="secondary" onclick="loadImageSettings()">重新加载</button>
+        </div>
+
+        <pre id="imagePreview" class="preview">Qwen 配置预览加载中...</pre>
       </div>
-
-      <div id="userSummary" class="user-summary">用户信息待刷新</div>
-
-      <pre id="preview">Cookie 预览加载中...</pre>
     </div>
   </div>
 
   <script>
+    async function readJsonResponse(response) {
+      const text = await response.text();
+      const contentType = response.headers.get('content-type') || '';
+
+      if (response.status === 401) {
+        throw new Error('UNAUTHORIZED');
+      }
+
+      if (response.status === 404) {
+        throw new Error('API_NOT_FOUND');
+      }
+
+      if (!contentType.includes('application/json')) {
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+          throw new Error('服务器返回了 HTML 页面。请确认你访问的域名与登录时一致，并且当前会话仍然有效。');
+        }
+        throw new Error(`接口未返回 JSON，当前 content-type 为 ${contentType || 'unknown'}`);
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        throw new Error(`接口 JSON 解析失败：${error.message}`);
+      }
+    }
+
+    function redirectToLogin() {
+      window.location.href = '/login.html?redirect=' + encodeURIComponent('/admin.html');
+    }
+
     function setStatus(message, type) {
       const status = document.getElementById('status');
       status.className = `status ${type}`;
@@ -247,14 +148,22 @@
       const summaryEl = document.getElementById('userSummary');
       if (data && data.userInfo) {
         const info = data.userInfo;
-        summaryEl.textContent = `自动刷新用户信息成功：${info.name || '未命名用户'} | 粉丝 ${info.fans ?? '-'} | 关注 ${info.follow ?? '-'} | 获赞 ${info.likes ?? '-'} `;
+        summaryEl.textContent = `自动刷新用户信息成功：${info.name || '未命名用户'} | 粉丝 ${info.fans ?? '-'} | 关注 ${info.follow ?? '-'} | 获赞 ${info.likes ?? '-'}`;
+      } else {
+        summaryEl.textContent = '已加载 Cookie 配置，暂未附带用户信息。';
       }
+    }
+
+    function setImageStatus(message, type) {
+      const status = document.getElementById('imageStatus');
+      status.className = `status ${type}`;
+      status.textContent = message;
     }
 
     async function loadCookie() {
       try {
         const response = await fetch('/api/admin/cookies');
-        const result = await response.json();
+        const result = await readJsonResponse(response);
         if (!result.success) {
           throw new Error(result.message || '加载失败');
         }
@@ -263,6 +172,15 @@
         renderCookieSummary(result.data);
         setStatus('已加载当前 Cookie 配置', 'success');
       } catch (error) {
+        if (error.message === 'UNAUTHORIZED') {
+          setStatus('当前会话未登录或已失效，正在跳转到登录页...', 'error');
+          setTimeout(redirectToLogin, 600);
+          return;
+        }
+        if (error.message === 'API_NOT_FOUND') {
+          setStatus('后端缺少 /api/admin/cookies 接口。请确认服务已部署最新代码并重启。', 'error');
+          return;
+        }
         setStatus(`加载失败：${error.message}`, 'error');
       }
     }
@@ -280,7 +198,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rawCookie })
         });
-        const result = await response.json();
+        const result = await readJsonResponse(response);
         if (!response.ok || !result.success) {
           throw new Error(result.message || '保存失败');
         }
@@ -292,6 +210,15 @@
           document.getElementById('userSummary').textContent = '已保存 Cookie，但未获取到用户信息，请确认 Cookie 有效且账号已登录。';
         }
       } catch (error) {
+        if (error.message === 'UNAUTHORIZED') {
+          setStatus('当前会话未登录或已失效，正在跳转到登录页...', 'error');
+          setTimeout(redirectToLogin, 600);
+          return;
+        }
+        if (error.message === 'API_NOT_FOUND') {
+          setStatus('后端缺少 /api/admin/cookies 接口。请确认服务已部署最新代码并重启。', 'error');
+          return;
+        }
         setStatus(`保存失败：${error.message}`, 'error');
       } finally {
         button.disabled = false;
@@ -299,7 +226,91 @@
       }
     }
 
+    function renderImageSettings(settingsWrapper) {
+      const data = settingsWrapper && settingsWrapper.settings ? settingsWrapper.settings : (settingsWrapper || {});
+      document.getElementById('imageEndpoint').value = data.endpoint || '';
+      document.getElementById('imageModel').value = data.model || '';
+      document.getElementById('imageSize').value = data.size || '';
+      document.getElementById('imageApiKey').value = data.apiKey || '';
+      document.getElementById('imageEnabled').checked = Boolean(data.enabled);
+      document.getElementById('imageWatermark').checked = Boolean(data.watermark);
+      document.getElementById('imagePromptTemplate').value = data.promptTemplate || '';
+      document.getElementById('imageNegativePrompt').value = data.negativePrompt || '';
+      document.getElementById('imagePreview').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function loadImageSettings() {
+      try {
+        const response = await fetch('/api/admin/featured-image-generation');
+        const result = await readJsonResponse(response);
+        if (!result.success) {
+          throw new Error(result.message || '加载失败');
+        }
+
+        renderImageSettings(result.data);
+        setImageStatus('已加载 Qwen 头图配置', 'success');
+      } catch (error) {
+        if (error.message === 'UNAUTHORIZED') {
+          setImageStatus('当前会话未登录或已失效，正在跳转到登录页...', 'error');
+          setTimeout(redirectToLogin, 600);
+          return;
+        }
+        if (error.message === 'API_NOT_FOUND') {
+          setImageStatus('后端缺少 /api/admin/featured-image-generation 接口。请确认服务已部署最新代码并重启。', 'error');
+          return;
+        }
+        setImageStatus(`加载失败：${error.message}`, 'error');
+      }
+    }
+
+    async function saveImageSettings() {
+      const button = document.getElementById('saveImageBtn');
+      const payload = {
+        endpoint: document.getElementById('imageEndpoint').value.trim(),
+        model: document.getElementById('imageModel').value.trim(),
+        size: document.getElementById('imageSize').value.trim(),
+        apiKey: document.getElementById('imageApiKey').value.trim(),
+        enabled: document.getElementById('imageEnabled').checked,
+        watermark: document.getElementById('imageWatermark').checked,
+        promptTemplate: document.getElementById('imagePromptTemplate').value.trim(),
+        negativePrompt: document.getElementById('imageNegativePrompt').value.trim()
+      };
+
+      button.disabled = true;
+      button.textContent = '保存中...';
+
+      try {
+        const response = await fetch('/api/admin/featured-image-generation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await readJsonResponse(response);
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || '保存失败');
+        }
+
+        renderImageSettings(result.data);
+        setImageStatus(result.message || 'Qwen 头图配置已保存', 'success');
+      } catch (error) {
+        if (error.message === 'UNAUTHORIZED') {
+          setImageStatus('当前会话未登录或已失效，正在跳转到登录页...', 'error');
+          setTimeout(redirectToLogin, 600);
+          return;
+        }
+        if (error.message === 'API_NOT_FOUND') {
+          setImageStatus('后端缺少 /api/admin/featured-image-generation 接口。请确认服务已部署最新代码并重启。', 'error');
+          return;
+        }
+        setImageStatus(`保存失败：${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = '保存头图配置';
+      }
+    }
+
     loadCookie();
+    loadImageSettings();
   </script>
 </body>
 </html>

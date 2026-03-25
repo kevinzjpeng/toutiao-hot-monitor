@@ -346,6 +346,65 @@ async function dismissTips(driver) {
   return clickButtonByText(driver, '我知道了|知道了|关闭|稍后再说');
 }
 
+async function enableAdvertisementOption(driver) {
+  return driver.executeScript(
+    `
+    const normalize = (text) => String(text || '').replace(/\s+/g, ' ').trim();
+    const isVisible = (el) => {
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 1 && rect.height > 1;
+    };
+    const isChecked = (el) => {
+      if (!el) return false;
+      if (el.matches && el.matches('input[type="checkbox"], input[type="radio"]')) {
+        return !!el.checked;
+      }
+      const ariaChecked = el.getAttribute && el.getAttribute('aria-checked');
+      if (ariaChecked === 'true') return true;
+      const ariaPressed = el.getAttribute && el.getAttribute('aria-pressed');
+      if (ariaPressed === 'true') return true;
+      const className = String(el.className || '');
+      return /checked|selected|active|open|on/.test(className);
+    };
+
+    const textPattern = /广告|收益|变现|头条首发|首发/;
+    const skipPattern = /发布得更多收益|广告合作|媒体合作/;
+    const roots = Array.from(document.querySelectorAll('label, .arco-form-item, .byte-form-item, .form-item, .setting-item, [role="dialog"], .arco-modal, .byte-modal, div'));
+    const clicked = [];
+
+    for (const root of roots) {
+      if (!isVisible(root)) continue;
+      const text = normalize(root.innerText || root.textContent || '');
+      if (!text || text.length > 120) continue;
+      if (!textPattern.test(text) || skipPattern.test(text)) continue;
+
+      const toggle = root.matches && root.matches('input[type="checkbox"], [role="switch"], [role="checkbox"], .arco-switch, .byte-switch')
+        ? root
+        : root.querySelector('input[type="checkbox"], [role="switch"], [role="checkbox"], .arco-switch, .byte-switch');
+
+      if (!toggle || !isVisible(toggle) || isChecked(toggle)) continue;
+
+      try {
+        toggle.click();
+        clicked.push(text.slice(0, 60));
+      } catch (error) {
+        try {
+          root.click();
+          clicked.push(text.slice(0, 60));
+        } catch (innerError) {}
+      }
+    }
+
+    return {
+      attempted: true,
+      clicked,
+      enabled: clicked.length > 0
+    };
+    `
+  );
+}
+
 async function installNetworkCapture(driver) {
   await driver.executeScript(
     `
@@ -956,6 +1015,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
     if (publishMode && normalizedResult && normalizedResult.clickedButtonText) {
       try {
         await driver.sleep(1200);
+        await enableAdvertisementOption(driver);
         await driver.executeScript(
           `
           const clickConfirm = () => {
@@ -1042,6 +1102,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
       try {
         await driver.sleep(1200);
         await dismissTips(driver);
+        await enableAdvertisementOption(driver);
 
         await driver.wait(async () => {
           const text = await driver.executeScript(
