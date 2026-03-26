@@ -255,6 +255,78 @@ function buildHtmlParagraphContent(text) {
     .join('');
 }
 
+function normalizeAbsoluteImageUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) return `https:${raw}`;
+  return raw;
+}
+
+function buildArticleHtmlContent(text, runtimeOptions = {}) {
+  const publishType = normalizePublishType(runtimeOptions.publishType);
+  const includeImage = runtimeOptions.includeGeneratedImageInArticle !== false;
+  const bodyHtml = buildHtmlParagraphContent(text);
+
+  if (!includeImage || publishType !== 'article') {
+    return bodyHtml;
+  }
+
+  const imageUrl = normalizeAbsoluteImageUrl(runtimeOptions.articleImageUrl);
+
+  if (!imageUrl) {
+    return bodyHtml;
+  }
+
+  const escapedUrl = imageUrl
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const imageBlock = `<p data-track="0"><img src="${escapedUrl}" alt="" style="max-width:100%;height:auto;" /></p>`;
+  return imageBlock + bodyHtml;
+}
+
+function prependImageToHtmlContent(htmlContent, imageUrl) {
+  const safeUrl = normalizeAbsoluteImageUrl(imageUrl);
+  if (!safeUrl) return String(htmlContent || '');
+
+  const escapedUrl = safeUrl
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const imageBlock = `<p data-track="0"><img src="${escapedUrl}" alt="" style="max-width:100%;height:auto;" /></p>`;
+  const content = String(htmlContent || '');
+  if (!content) return imageBlock;
+  if (/<img\s+[^>]*src=/.test(content)) return content;
+  return imageBlock + content;
+}
+
+function pickArticleImageUrlFromCoverResult(coverResult) {
+  const spice = coverResult && coverResult.spiceImageData ? coverResult.spiceImageData : {};
+  const payload = coverResult && coverResult.coverPayload ? coverResult.coverPayload : {};
+
+  return normalizeAbsoluteImageUrl(
+    spice.origin_image_url ||
+    spice.image_url ||
+    payload.origin_url ||
+    payload.url ||
+    ''
+  );
+}
+
+function injectArticleImageIntoRawBody(rawBody, imageUrl) {
+  const form = new URLSearchParams(String(rawBody || ''));
+  const content = form.get('content') || '';
+  const nextContent = prependImageToHtmlContent(content, imageUrl);
+  if (nextContent !== content) {
+    form.set('content', nextContent);
+  }
+  return form.toString();
+}
+
 function stripHtmlToText(html) {
   return String(html || '')
     .replace(/<[^>]*>/g, '')
@@ -331,7 +403,7 @@ function normalizePublishBodyFromTemplate(runtimeOptions = {}) {
 
   const publishType = normalizePublishType(runtimeOptions.publishType);
   const title = (runtimeOptions.title || '').trim();
-  const htmlContent = (runtimeOptions.htmlContent || '').trim() || buildHtmlParagraphContent(runtimeOptions.content || '');
+  const htmlContent = (runtimeOptions.htmlContent || '').trim() || buildArticleHtmlContent(runtimeOptions.content || '', runtimeOptions);
   const fallbackTitle = !title && publishType === 'weitoutiao'
     ? stripHtmlToText(htmlContent).slice(0, 30)
     : '';
@@ -438,7 +510,7 @@ function buildPublishFormBody(runtimeOptions = {}) {
     tuwen_wtt_transfer_switch: '1'
   };
 
-  const htmlContent = buildHtmlParagraphContent(content);
+  const htmlContent = buildArticleHtmlContent(content, runtimeOptions);
 
   const form = new URLSearchParams();
   form.set('source', String(runtimeOptions.source || 29));
@@ -1105,6 +1177,18 @@ async function publishDraftViaHttp(runtimeOptions = {}) {
       const coverInjection = await uploadCoverAndInject(initialBody, requestHeaders, options, timeoutMs);
       requestBody = coverInjection.rawBody;
       coverResult = coverInjection.cover;
+
+      const articleImageUrl = pickArticleImageUrlFromCoverResult(coverResult);
+      const shouldInjectArticleImage =
+        normalizePublishType(options.publishType) === 'article' &&
+        options.includeGeneratedImageInArticle !== false &&
+        coverResult &&
+        coverResult.used &&
+        articleImageUrl;
+
+      if (shouldInjectArticleImage) {
+        requestBody = injectArticleImageIntoRawBody(requestBody, articleImageUrl);
+      }
     } catch (error) {
       coverResult = {
         used: false,

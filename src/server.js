@@ -579,7 +579,9 @@ app.post('/api/publish-queue/:id/publish/http', async (req, res) => {
       return res.status(404).json({ success: false, message: '文章不存在' });
     }
 
-    if (String(article.status || '').toLowerCase() === 'published') {
+    const forceRepublish = Boolean(req.body && req.body.forceRepublish);
+
+    if (!forceRepublish && String(article.status || '').toLowerCase() === 'published') {
       return res.status(409).json({
         success: false,
         queueId: id,
@@ -594,11 +596,15 @@ app.post('/api/publish-queue/:id/publish/http', async (req, res) => {
       title: article.title,
       content: article.content,
       coverImageUrl: article.coverUrl || (req.body && req.body.coverImageUrl) || '',
+      articleImageUrl: (req.body && req.body.articleImageUrl) || article.coverUrl || '',
+      includeGeneratedImageInArticle: req.body && req.body.includeGeneratedImageInArticle === false ? false : true,
       sourceUrl: article.sourceUrl || (req.body && req.body.sourceUrl) || ''
     };
 
     const result = await publishDraftViaHttp(runtimeOptions);
-    const nextStatus = result.ok ? 'published' : (article.status || 'pending');
+    const nextStatus = result.ok
+      ? 'published'
+      : (forceRepublish ? 'pending' : (article.status || 'pending'));
 
     storage.updatePendingArticle(id, {
       status: nextStatus,

@@ -187,28 +187,81 @@ async function uploadCoverImage(driver, imagePath, timeoutMs) {
     return false;
     `
   );
+
+  // Fallback: click icon-only cover upload hotspots in the cover section.
+  await driver.executeScript(
+    `
+    const textOf = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    const isVisible = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 8 && r.height > 8;
+    };
+    const clickSafe = (el) => {
+      if (!isVisible(el)) return false;
+      try { el.click(); return true; } catch (e) { return false; }
+    };
+
+    const coverLabel = Array.from(document.querySelectorAll('div,span,label,p,h4,h3'))
+      .find(el => /展示封面/.test(textOf(el)));
+
+    const zone = coverLabel
+      ? (coverLabel.closest('section, form, .byte-col, .arco-card, .arco-space, .garr-panel, div') || document.body)
+      : document.body;
+
+    const iconLike = Array.from(zone.querySelectorAll('button, [role="button"], .arco-btn, .byte-btn, div, span, a'))
+      .filter(isVisible)
+      .filter(el => {
+        const t = textOf(el);
+        if (/单图|三图|无封面|预览|展示封面/.test(t)) return false;
+        if (/上传封面|更换封面|上传图片|本地上传/.test(t)) return true;
+        // icon-like nodes often have little/no text.
+        return t.length === 0 || t.length <= 2;
+      })
+      .sort((a, b) => {
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        return rb.width * rb.height - ra.width * ra.height;
+      });
+
+    for (const el of iconLike.slice(0, 20)) {
+      if (clickSafe(el)) {
+        break;
+      }
+    }
+    `
+  );
   await driver.sleep(900);
 
-  let fileInputs = await driver.findElements(By.css('input[type="file"], input[accept*="image"]'));
+  const inputSearch = await findFileInputAcrossFrames(driver, Math.min(timeoutMs, 7000));
+  const fileInputs = inputSearch.inputs || [];
   if (!fileInputs.length) {
-    try {
-      await driver.wait(async () => {
-        const els = await driver.findElements(By.css('input[type="file"], input[accept*="image"]'));
-        fileInputs = els;
-        return els.length > 0;
-      }, Math.min(timeoutMs, 7000));
-    } catch (error) {
-      // Keep empty and return diagnostics below.
+    const cdpUpload = await uploadImageViaCdpFileInput(driver, imagePath);
+    if (cdpUpload.uploaded) {
+      await driver.switchTo().defaultContent();
+      return {
+        attempted: true,
+        uploaded: true,
+        reason: null,
+        via: cdpUpload.via,
+        candidateCount: cdpUpload.candidateCount
+      };
     }
-  }
-  if (!fileInputs.length) {
+
     const hint = await driver.executeScript(
       `
       const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
       return text.slice(0, 600);
       `
     );
-    return { attempted: true, uploaded: false, reason: 'file-input-not-found', hint };
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'file-input-not-found',
+      hint,
+      framePath: inputSearch.framePath,
+      cdpFallback: cdpUpload
+    };
   }
 
   let uploaded = false;
@@ -242,8 +295,28 @@ async function uploadCoverImage(driver, imagePath, timeoutMs) {
   }
 
   if (!uploaded) {
-    return { attempted: true, uploaded: false, reason: 'send-keys-failed' };
+    const cdpUpload = await uploadImageViaCdpFileInput(driver, imagePath);
+    if (cdpUpload.uploaded) {
+      await driver.switchTo().defaultContent();
+      return {
+        attempted: true,
+        uploaded: true,
+        reason: null,
+        via: cdpUpload.via,
+        candidateCount: cdpUpload.candidateCount
+      };
+    }
+
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'send-keys-failed',
+      framePath: inputSearch.framePath,
+      cdpFallback: cdpUpload
+    };
   }
+
+  await driver.switchTo().defaultContent();
 
   try {
     await driver.wait(async () => {
@@ -262,6 +335,239 @@ async function uploadCoverImage(driver, imagePath, timeoutMs) {
   }
 
   return { attempted: true, uploaded: true, reason: null };
+}
+
+async function uploadArticleImage(driver, imagePath, timeoutMs) {
+  if (!imagePath) {
+    return { attempted: false, uploaded: false, reason: 'no-image-path' };
+  }
+
+  await dismissTips(driver);
+  await driver.sleep(600);
+
+  // Try clicking rich-text toolbar image upload controls first.
+  try {
+    await driver.executeScript(
+      `
+      const isVisible = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 1 && r.height > 1;
+      };
+      const normalize = (v) => String(v || '').replace(/\s+/g, '').trim();
+      const editor = document.querySelector('.ProseMirror[contenteditable="true"], .ProseMirror, .ql-editor, [data-slate-editor="true"], .editor [contenteditable="true"], [contenteditable="true"], textarea[placeholder*="正文"], textarea[placeholder*="内容"]');
+      const roots = [];
+      if (editor) {
+        const block = editor.closest('section, article, form, .garr-panel, .byte-col, .arco-card, div');
+        if (block) roots.push(block);
+      }
+      roots.push(document);
+
+      const clicked = [];
+      for (const root of roots) {
+        const cands = Array.from(root.querySelectorAll('button, [role="button"], .arco-btn, .byte-btn, span, div, a'));
+        for (const el of cands) {
+          if (!isVisible(el)) continue;
+          const text = normalize(el.innerText || el.textContent || '');
+          if (!text || text.length > 20) continue;
+          if (!/图片|插图|上传图片|本地上传/.test(text)) continue;
+          try {
+            el.click();
+            clicked.push(text);
+            if (clicked.length >= 2) return clicked;
+          } catch (e) {}
+        }
+      }
+      return clicked;
+      `
+    );
+    await clickButtonByText(driver, '图片|插入图片|上传图片|本地上传');
+  } catch (error) {
+    // Continue to file input probing.
+  }
+
+  // Fallback: click icon-only image toolbar controls near editor.
+  try {
+    await driver.executeScript(
+      `
+      const isVisible = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 8 && r.height > 8;
+      };
+      const normalize = (v) => String(v || '').replace(/\s+/g, '').trim();
+      const clickSafe = (el) => {
+        if (!isVisible(el)) return false;
+        try { el.click(); return true; } catch (e) { return false; }
+      };
+
+      const editor = document.querySelector('.ProseMirror[contenteditable="true"], .ProseMirror, .ql-editor, [data-slate-editor="true"], .editor [contenteditable="true"], [contenteditable="true"], textarea[placeholder*="正文"], textarea[placeholder*="内容"]');
+      const block = editor ? (editor.closest('section, article, form, .garr-panel, .byte-col, .arco-card, div') || document.body) : document.body;
+
+      const ariaTargets = Array.from(block.querySelectorAll('button[aria-label*="图片"], button[title*="图片"], [role="button"][aria-label*="图片"], [class*="upload"], [class*="image"]'))
+        .filter(isVisible);
+
+      for (const el of ariaTargets.slice(0, 10)) {
+        if (clickSafe(el)) {
+          return true;
+        }
+      }
+
+      const iconButtons = Array.from(block.querySelectorAll('button, [role="button"], .arco-btn, .byte-btn, span, div, a'))
+        .filter(isVisible)
+        .filter(el => {
+          const t = normalize(el.innerText || el.textContent || '');
+          if (/图片|插图|上传/.test(t)) return true;
+          return t.length === 0 || t.length <= 2;
+        })
+        .sort((a, b) => {
+          const ra = a.getBoundingClientRect();
+          const rb = b.getBoundingClientRect();
+          return rb.width * rb.height - ra.width * ra.height;
+        });
+
+      for (const el of iconButtons.slice(0, 25)) {
+        if (clickSafe(el)) {
+          return true;
+        }
+      }
+
+      return false;
+      `
+    );
+  } catch (error) {
+    // Continue to file input probing.
+  }
+
+  await driver.sleep(700);
+
+  const inputSearch = await findFileInputAcrossFrames(driver, Math.min(timeoutMs, 7000));
+  const fileInputs = inputSearch.inputs || [];
+
+  if (!fileInputs.length) {
+    const cdpUpload = await uploadImageViaCdpFileInput(driver, imagePath);
+    if (cdpUpload.uploaded) {
+      await driver.switchTo().defaultContent();
+      return {
+        attempted: true,
+        uploaded: true,
+        reason: null,
+        via: cdpUpload.via,
+        candidateCount: cdpUpload.candidateCount
+      };
+    }
+
+    const hint = await driver.executeScript(
+      `
+      const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+      return text.slice(0, 600);
+      `
+    );
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'file-input-not-found',
+      hint,
+      framePath: inputSearch.framePath,
+      cdpFallback: cdpUpload
+    };
+  }
+
+  let uploaded = false;
+  for (const input of fileInputs) {
+    try {
+      await input.sendKeys(imagePath);
+      uploaded = true;
+      break;
+    } catch (error) {
+      try {
+        await driver.executeScript(
+          `
+          const el = arguments[0];
+          if (!el) return;
+          el.removeAttribute('hidden');
+          el.style.display = 'block';
+          el.style.visibility = 'visible';
+          el.style.opacity = '1';
+          el.style.width = '1px';
+          el.style.height = '1px';
+          `,
+          input
+        );
+        await input.sendKeys(imagePath);
+        uploaded = true;
+        break;
+      } catch (error2) {
+        // Try next input.
+      }
+    }
+  }
+
+  if (!uploaded) {
+    const cdpUpload = await uploadImageViaCdpFileInput(driver, imagePath);
+    if (cdpUpload.uploaded) {
+      await driver.switchTo().defaultContent();
+      return {
+        attempted: true,
+        uploaded: true,
+        reason: null,
+        via: cdpUpload.via,
+        candidateCount: cdpUpload.candidateCount
+      };
+    }
+
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'send-keys-failed',
+      framePath: inputSearch.framePath,
+      cdpFallback: cdpUpload
+    };
+  }
+
+  await driver.switchTo().defaultContent();
+
+  try {
+    await driver.wait(async () => {
+      const state = await driver.executeScript(
+        `
+        const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+        const fail = /上传失败|图片格式不支持|上传出错/.test(text);
+        const okHint = /删除图片|替换图片|图片已上传|插入图片|上传成功/.test(text);
+        return { fail, okHint };
+        `
+      );
+      return !!(state && (state.okHint || state.fail));
+    }, Math.min(timeoutMs, 12000));
+  } catch (error) {
+    // Best-effort.
+  }
+
+  return { attempted: true, uploaded: true, reason: null };
+}
+
+async function applyHumanEditDelay(driver, options = {}) {
+  const min = Number(options.humanEditDelaySecMin);
+  const max = Number(options.humanEditDelaySecMax);
+  const minSec = Number.isFinite(min) && min > 0 ? min : 10;
+  const maxSec = Number.isFinite(max) && max >= minSec ? max : 30;
+  const delaySec = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+
+  try {
+    await driver.executeScript(
+      `
+      const editor = document.querySelector('.ProseMirror[contenteditable="true"], .ProseMirror, .ql-editor, [data-slate-editor="true"], .editor [contenteditable="true"], [contenteditable="true"], textarea[placeholder*="正文"], textarea[placeholder*="内容"]');
+      if (editor && typeof editor.focus === 'function') {
+        editor.focus();
+      }
+      `
+    );
+  } catch (error) {
+    // Ignore editor focus failures.
+  }
+
+  await driver.sleep(delaySec * 1000);
+  return { applied: true, delaySec };
 }
 
 function parseCookieString(rawCookie) {
@@ -344,6 +650,235 @@ async function clickButtonByText(driver, patternSource) {
 
 async function dismissTips(driver) {
   return clickButtonByText(driver, '我知道了|知道了|关闭|稍后再说');
+}
+
+async function uploadImageViaCdpFileInput(driver, imagePath) {
+  if (!imagePath) {
+    return { attempted: false, uploaded: false, reason: 'no-image-path' };
+  }
+
+  const hasCdp =
+    driver &&
+    typeof driver.sendDevToolsCommand === 'function' &&
+    typeof driver.sendAndGetDevToolsCommand === 'function';
+
+  if (!hasCdp) {
+    return { attempted: false, uploaded: false, reason: 'cdp-not-supported' };
+  }
+
+  try {
+    await driver.sendDevToolsCommand('DOM.enable');
+    const flatDoc = await driver.sendAndGetDevToolsCommand('DOM.getFlattenedDocument', {
+      depth: -1,
+      pierce: true
+    });
+
+    const nodes = Array.isArray(flatDoc && flatDoc.nodes) ? flatDoc.nodes : [];
+    const candidates = nodes.filter((node) => {
+      if (!node || String(node.nodeName || '').toUpperCase() !== 'INPUT') return false;
+      const attrs = Array.isArray(node.attributes) ? node.attributes : [];
+      let typeValue = '';
+      let acceptValue = '';
+      for (let i = 0; i < attrs.length; i += 2) {
+        const k = String(attrs[i] || '').toLowerCase();
+        const v = String(attrs[i + 1] || '');
+        if (k === 'type') typeValue = v.toLowerCase();
+        if (k === 'accept') acceptValue = v.toLowerCase();
+      }
+      return typeValue === 'file' || acceptValue.includes('image');
+    });
+
+    for (const node of candidates) {
+      try {
+        await driver.sendDevToolsCommand('DOM.setFileInputFiles', {
+          nodeId: node.nodeId,
+          files: [imagePath]
+        });
+        return {
+          attempted: true,
+          uploaded: true,
+          reason: null,
+          via: 'cdp-set-file-input',
+          candidateCount: candidates.length
+        };
+      } catch (error) {
+        // Try the next candidate.
+      }
+    }
+
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'cdp-file-input-not-set',
+      candidateCount: candidates.length
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      uploaded: false,
+      reason: 'cdp-failed',
+      message: error.message
+    };
+  }
+}
+
+async function getDisplayedWordCount(driver) {
+  try {
+    const result = await driver.executeScript(
+      `
+      const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+      const m = text.match(/共\s*(\d+)\s*字/);
+      return m ? Number(m[1]) : null;
+      `
+    );
+    return Number.isFinite(result) ? result : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function typeContentByRealKeys(driver, content, options = {}) {
+  const text = String(content || '').trim();
+  if (!text) {
+    return { typed: false, reason: 'empty-content' };
+  }
+
+  const minKeyDelay = Number(options.typingKeyDelayMsMin);
+  const maxKeyDelay = Number(options.typingKeyDelayMsMax);
+  const minParaPause = Number(options.typingParagraphPauseMsMin);
+  const maxParaPause = Number(options.typingParagraphPauseMsMax);
+
+  const keyDelayMin = Number.isFinite(minKeyDelay) && minKeyDelay >= 0 ? minKeyDelay : 18;
+  const keyDelayMax = Number.isFinite(maxKeyDelay) && maxKeyDelay >= keyDelayMin ? maxKeyDelay : 65;
+  const paraPauseMin = Number.isFinite(minParaPause) && minParaPause >= 0 ? minParaPause : 300;
+  const paraPauseMax = Number.isFinite(maxParaPause) && maxParaPause >= paraPauseMin ? maxParaPause : 900;
+
+  const randomInt = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+
+  const editorCandidates = await driver.findElements(
+    By.css('.ProseMirror[contenteditable="true"], .ProseMirror, .ql-editor, [data-slate-editor="true"], .editor [contenteditable="true"], [contenteditable="true"], textarea[placeholder*="正文"], textarea[placeholder*="内容"]')
+  );
+  if (!editorCandidates.length) {
+    return { typed: false, reason: 'editor-not-found' };
+  }
+
+  const contentEl = editorCandidates[0];
+  await contentEl.click();
+  await contentEl.sendKeys(Key.chord(Key.CONTROL, 'a'), Key.BACK_SPACE);
+
+  for (const line of text.split('\n')) {
+    for (const ch of line) {
+      await contentEl.sendKeys(ch);
+      await driver.sleep(randomInt(keyDelayMin, keyDelayMax));
+    }
+    await contentEl.sendKeys(Key.ENTER);
+    await driver.sleep(randomInt(paraPauseMin, paraPauseMax));
+  }
+
+  await driver.sleep(900);
+  const displayedWordCount = await getDisplayedWordCount(driver);
+  return { typed: true, reason: null, displayedWordCount };
+}
+
+async function findFileInputAcrossFrames(driver, timeoutMs = 7000, maxDepth = 4) {
+  const selector = 'input[type="file"], input[accept*="image"]';
+  const start = Date.now();
+
+  const searchInCurrentFrame = async () => {
+    const inputs = await driver.findElements(By.css(selector));
+    return inputs && inputs.length > 0 ? inputs : [];
+  };
+
+  const searchFramesRecursively = async (depth = 0, path = []) => {
+    if (depth > maxDepth) return null;
+
+    const directInputs = await searchInCurrentFrame();
+    if (directInputs.length) {
+      return { inputs: directInputs, framePath: path.slice() };
+    }
+
+    const frames = await driver.findElements(By.css('iframe, frame'));
+    for (let i = 0; i < frames.length; i += 1) {
+      try {
+        await driver.switchTo().frame(frames[i]);
+      } catch (error) {
+        continue;
+      }
+
+      const found = await searchFramesRecursively(depth + 1, path.concat(i));
+      if (found) {
+        return found;
+      }
+
+      try {
+        await driver.switchTo().parentFrame();
+      } catch (error) {
+        await driver.switchTo().defaultContent();
+        for (const idx of path) {
+          try {
+            const levelFrames = await driver.findElements(By.css('iframe, frame'));
+            if (!levelFrames[idx]) break;
+            await driver.switchTo().frame(levelFrames[idx]);
+          } catch (innerError) {
+            break;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  while (Date.now() - start < timeoutMs) {
+    await driver.switchTo().defaultContent();
+    const found = await searchFramesRecursively(0, []);
+    if (found && found.inputs && found.inputs.length) {
+      return {
+        found: true,
+        inputs: found.inputs,
+        framePath: found.framePath
+      };
+    }
+    await driver.sleep(300);
+  }
+
+  await driver.switchTo().defaultContent();
+  return {
+    found: false,
+    inputs: [],
+    framePath: null
+  };
+}
+
+async function ensurePositiveWordCountBeforePublish(driver, content, options = {}) {
+  const maxAttemptsRaw = Number(options.wordCountCheckMaxAttempts);
+  const maxAttempts = Number.isFinite(maxAttemptsRaw) && maxAttemptsRaw > 0 ? Math.min(maxAttemptsRaw, 3) : 2;
+  const attempts = [];
+
+  for (let i = 1; i <= maxAttempts; i += 1) {
+    const typing = await typeContentByRealKeys(driver, content, options);
+    const displayedWordCount = await getDisplayedWordCount(driver);
+    const ok = Number.isFinite(displayedWordCount) && displayedWordCount > 0;
+    attempts.push({
+      attempt: i,
+      typed: typing.typed,
+      typingReason: typing.reason || null,
+      displayedWordCount
+    });
+    if (ok) {
+      return {
+        ok: true,
+        attempts,
+        displayedWordCount
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    attempts,
+    displayedWordCount: attempts.length ? attempts[attempts.length - 1].displayedWordCount : null
+  };
 }
 
 async function captureScreenArtifact(driver, label = 'snapshot') {
@@ -1135,6 +1670,46 @@ async function saveDraftArticleViaSelenium(options = {}) {
     );
 
     let normalizedResult = result;
+
+    let wordCountCheck = null;
+    if (publishMode && options.forceRealTypingBeforePublish !== false) {
+      try {
+        const typed = await typeContentByRealKeys(driver, content, options);
+        normalizedResult = {
+          ...normalizedResult,
+          realTyping: typed
+        };
+      } catch (error) {
+        normalizedResult = {
+          ...normalizedResult,
+          realTyping: { typed: false, reason: error.message }
+        };
+      }
+    }
+
+    if (publishMode && options.ensurePositiveWordCount !== false) {
+      try {
+        wordCountCheck = await ensurePositiveWordCountBeforePublish(driver, content, options);
+        normalizedResult = {
+          ...normalizedResult,
+          wordCountCheck
+        };
+        if (!wordCountCheck.ok) {
+          normalizedResult = {
+            ...normalizedResult,
+            ok: false,
+            message: '发布前字数校验失败（共0字），已跳过发布点击'
+          };
+        }
+      } catch (error) {
+        wordCountCheck = { ok: false, reason: error.message };
+        normalizedResult = {
+          ...normalizedResult,
+          wordCountCheck
+        };
+      }
+    }
+
     let prePublishScreenshotPath = null;
 
     let coverUpload = null;
@@ -1150,6 +1725,44 @@ async function saveDraftArticleViaSelenium(options = {}) {
         normalizedResult = {
           ...normalizedResult,
           coverUpload
+        };
+      }
+    }
+
+    let articleImageUpload = null;
+    const shouldUploadImageInArticle =
+      publishMode &&
+      useCoverImage &&
+      options.insertImageInArticle !== false;
+
+    if (shouldUploadImageInArticle) {
+      try {
+        articleImageUpload = await uploadArticleImage(driver, coverInfo.coverImagePath, timeoutMs);
+        normalizedResult = {
+          ...normalizedResult,
+          articleImageUpload
+        };
+      } catch (error) {
+        articleImageUpload = { attempted: true, uploaded: false, reason: error.message };
+        normalizedResult = {
+          ...normalizedResult,
+          articleImageUpload
+        };
+      }
+    }
+
+    let humanEditDelay = null;
+    if (publishMode && options.applyHumanEditDelay !== false) {
+      try {
+        humanEditDelay = await applyHumanEditDelay(driver, options);
+        normalizedResult = {
+          ...normalizedResult,
+          humanEditDelay
+        };
+      } catch (error) {
+        normalizedResult = {
+          ...normalizedResult,
+          humanEditDelay: { applied: false, reason: error.message }
         };
       }
     }
@@ -1191,7 +1804,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
     }
 
     // AIMedia-like behavior: after first publish click, try confirm publish in modal/footer.
-    if (publishMode && normalizedResult && normalizedResult.clickedButtonText) {
+    if (publishMode && (!wordCountCheck || wordCountCheck.ok) && normalizedResult && normalizedResult.clickedButtonText) {
       try {
         await driver.sleep(1200);
         await enableRequiredPublishSettings(driver);
@@ -1249,7 +1862,7 @@ async function saveDraftArticleViaSelenium(options = {}) {
     }
 
     // If editor still shows zero words, force real key input so editor model updates.
-    if (publishMode) {
+    if (publishMode && (!wordCountCheck || wordCountCheck.ok)) {
       try {
         const zeroWords = await driver.executeScript(
           `

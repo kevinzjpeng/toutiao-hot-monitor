@@ -819,7 +819,8 @@
         throw new Error(result.message || '加载待发布队列失败');
       }
 
-      renderQueuePanel(result.data || []);
+      const articles = result.data || [];
+      renderQueuePanel(articles);
       document.getElementById('lastUpdate').textContent = '最后更新：' + new Date().toLocaleString('zh-CN');
     }
 
@@ -928,8 +929,7 @@
       const publishInfo = item.publishResult
         ? `最近发布：${escapeHtml(item.publishResult.message || '')} (code ${escapeHtml(String(item.publishResult.code ?? ''))})`
         : '';
-      const publishButtonLabel = isPublished ? '✅ 已发布' : '🚀 发布';
-      const publishButtonDisabled = isPublished ? 'disabled' : '';
+      const publishButtonLabel = isPublished ? '♻️ 重发' : '🚀 发布';
       const coverPreview = coverUrl
         ? `<div class="queue-cover-wrap"><img class="queue-cover-img" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(item.title || '封面图')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" /></div>`
         : '';
@@ -947,7 +947,7 @@
           ${publishInfo ? `<div class="queue-meta">${publishInfo}</div>` : ''}
           <div class="queue-item-actions">
             <button class="queue-btn warn" onclick="editQueueArticle(${item.id})">✏️ 编辑</button>
-            <button class="queue-btn success" onclick="publishQueueArticle(${item.id})" ${publishButtonDisabled}>${publishButtonLabel}</button>
+            <button class="queue-btn success" onclick="publishQueueArticle(${item.id})">${publishButtonLabel}</button>
             <button class="queue-btn danger" onclick="deleteQueueArticle(${item.id})">🗑️ 删除</button>
           </div>
         </div>
@@ -1030,23 +1030,29 @@
     async function publishQueueArticle(id) {
       const messageEl = document.getElementById('queueFormMessage');
       const currentItemResult = await fetchJson(`/api/publish-queue/${id}`);
-      if (currentItemResult.success && currentItemResult.data && String(currentItemResult.data.status || '').toLowerCase() === 'published') {
-        messageEl.textContent = '该文章已发布，已禁止重复发布';
-        await loadPublishQueue();
-        return;
-      }
+      const currentItem = currentItemResult.success ? currentItemResult.data : null;
+      const isPublished = currentItem && String(currentItem.status || '').toLowerCase() === 'published';
+      const coverUrl = currentItem ? resolveQueueCoverUrl(currentItem) : '';
 
-      messageEl.textContent = '正在触发发布...';
+      messageEl.textContent = isPublished ? '正在重发（封面图将同步插入正文）...' : '正在触发发布（封面图将同步插入正文）...';
       const response = await fetch(`/api/publish-queue/${id}/publish/http`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          forceRepublish: Boolean(isPublished),
+          includeGeneratedImageInArticle: true,
+          articleImageUrl: coverUrl,
+          coverImageUrl: coverUrl
+        })
       });
       const result = await response.json();
       if (!result.success) {
         messageEl.textContent = `发布失败：${result.message || (result.result && result.result.message) || 'unknown'}`;
       } else {
-        messageEl.textContent = '发布成功';
+        const publishCode = result.result && result.result.code !== undefined
+          ? ` (code ${result.result.code})`
+          : '';
+        messageEl.textContent = `${isPublished ? '重发成功' : '发布成功'}${publishCode}`;
       }
       await loadPublishQueue();
     }
